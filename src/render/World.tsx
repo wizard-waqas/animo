@@ -9,7 +9,7 @@ import type { StylePreset } from "./styles";
 import { Part, shapes } from "./toon";
 
 /** Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action. */
-export const World = ({ style, set, props, focus, debug }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean }) => {
+export const World = ({ style, set, props, focus, debug, time }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean; time: number }) => {
   const setProps = useMemo(() => [...SET_PROPS[set], ...props], [set, props]);
   return (
     <>
@@ -22,7 +22,7 @@ export const World = ({ style, set, props, focus, debug }: { style: StylePreset;
       {/* Trees are instanced (cheap even by the hundred); everything else is a regular prop. */}
       <Forest trees={setProps.filter((prop) => prop.type === "tree" || prop.type === "pine")} />
       {setProps.filter((prop) => prop.type !== "tree" && prop.type !== "pine").map((prop, index) => (
-        <Prop key={index} prop={prop} night={style.night} />
+        <Prop key={index} prop={prop} night={style.night} time={time} />
       ))}
       {debug && <gridHelper args={[60, 60, "#ff006e", "#c8c8c8"]} position={[0, 0.08, 0]} />}
     </>

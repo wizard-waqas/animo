@@ -140,8 +140,21 @@ export interface ClipDefinition {
   /** Body clips that end in a new resting pose (lying down…) keep it until the next body action. */
   holds?: boolean;
   /** Something shown in the right hand while the clip plays. */
-  item?: "phone";
+  item?: HandItem;
+  /** The item leaves the hand this far (0..1) into the clip (it was put down). */
+  itemUntil?: number;
 }
+
+export type HandItem = "phone" | "mug" | "check";
+
+/** Sitting on a chair (seat ~0.45m): thighs forward and a little down, shins straight down, hands on the lap. */
+export const CHAIR_POSE: Pose = withPose({
+  rootY: -0.17, lHipX: 1.25, rHipX: 1.25, lKnee: 1.25, rKnee: 1.25,
+  lShoulderX: 0.45, rShoulderX: 0.45, lElbow: 0.9, rElbow: 0.9, lShoulderZ: 0.12, rShoulderZ: 0.12, spineX: -0.04,
+});
+
+/** Mug held in front of the chest (right hand). */
+const MUG_HOLD = { rShoulderX: 0.55, rShoulderZ: -0.05, rElbow: 1.75 };
 
 /** Lying flat on the back: hips on the ground, torso tipped back, legs out straight. */
 export const LYING_POSE: Pose = withPose({
@@ -340,6 +353,53 @@ export const CLIPS = {
         lElbow: 1.2, rElbow: 1.2, squash: 1 + 0.04 * wave(t, beat),
       });
     },
+  },
+  "sit-chair": {
+    layer: "body", defaultDuration: 0.6, holds: true, description: "Sits down on a chair and stays seated (stand it at the chair, facing out)",
+    pose: () => CHAIR_POSE,
+  },
+  "hold-mug": {
+    layer: "gesture", defaultDuration: 3, description: "Holds a coffee mug in front of the chest", item: "mug",
+    pose: (t) => withPose({ ...MUG_HOLD, headX: 0.04 + 0.02 * wave(t, 0.4) }),
+  },
+  sip: {
+    layer: "gesture", defaultDuration: 2.2, description: "Raises a coffee mug to the mouth, sips (head back), lowers it", item: "mug",
+    pose: (t, d) => {
+      const lift = Math.sin(Math.PI * clamp01(t / d)) ** 0.6;
+      return withPose({
+        rShoulderX: MUG_HOLD.rShoulderX + 0.45 * lift, rShoulderZ: MUG_HOLD.rShoulderZ - 0.12 * lift, rElbow: MUG_HOLD.rElbow + 0.55 * lift,
+        headX: -0.3 * lift, spineX: -0.05 * lift,
+      });
+    },
+  },
+  "set-down": {
+    layer: "gesture", defaultDuration: 1.4, description: "Leans right and sets the mug down on a table (the mug leaves the hand at 55%)", item: "mug", itemUntil: 0.55,
+    pose: (t, d) => {
+      const reach = Math.sin(Math.PI * clamp01(t / d));
+      return withPose({
+        rShoulderX: MUG_HOLD.rShoulderX + 0.35 * reach, rShoulderZ: MUG_HOLD.rShoulderZ + 0.6 * reach, rElbow: MUG_HOLD.rElbow - 1.25 * reach,
+        spineZ: -0.16 * reach, spineX: 0.12 * reach, headX: 0.15 * reach, headY: -0.3 * reach,
+      });
+    },
+  },
+  "look-left": {
+    layer: "gesture", defaultDuration: 2, description: "Turns head and shoulders to the left (their left) and holds",
+    pose: () => withPose({ headY: 0.85, spineY: 0.3, headX: 0.05 }),
+  },
+  "look-right": {
+    layer: "gesture", defaultDuration: 2, description: "Turns head and shoulders to the right (their right) and holds",
+    pose: () => withPose({ headY: -0.85, spineY: -0.3, headX: 0.05 }),
+  },
+  "check-phone": {
+    layer: "gesture", defaultDuration: 3, description: "Looks down at a phone held in front of the chest (watching a video)", item: "phone",
+    pose: (t) => withPose({ rShoulderX: 0.75, rShoulderZ: -0.2, rElbow: 1.55, lShoulderX: 0.55, lShoulderZ: -0.15, lElbow: 1.5, headX: 0.38 + 0.02 * wave(t, 0.5) }),
+  },
+  "show-check": {
+    layer: "gesture", defaultDuration: 2.5, description: "Holds up a giant check with both hands, showing it off", item: "check",
+    pose: (t) => withPose({
+      rShoulderX: 1.2, rShoulderZ: 0.35 + 0.04 * wave(t, 2), rElbow: 0.55, lShoulderX: 1.2, lShoulderZ: 0.35 + 0.04 * wave(t, 2, 1), lElbow: 0.55,
+      headX: -0.12, spineX: -0.06,
+    }),
   },
   "sit-ground": {
     layer: "body", defaultDuration: 3, description: "Sits down cross-legged-ish on the ground",
