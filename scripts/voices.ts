@@ -33,12 +33,28 @@ const pickProvider = (): VoiceProvider | undefined => {
 
 const SPEAKING_RATE: Record<Mood, number> = { neutral: 1, happy: 1.05, angry: 1.12, scared: 1.15, shocked: 1.05, smug: 0.95, sad: 0.9, pain: 0.95, dazed: 0.85 };
 
-/** Ask the provider for 16-bit mono PCM at 44.1 kHz. */
+/** Linear resample to the project rate (speech is band-limited well below either Nyquist, so this is clean). */
+const resample = (input: Float32Array, fromRate: number) => {
+  if (fromRate === SAMPLE_RATE) return input;
+  const ratio = fromRate / SAMPLE_RATE;
+  const output = new Float32Array(Math.floor(input.length / ratio));
+  for (let i = 0; i < output.length; i++) {
+    const position = i * ratio;
+    const index = Math.floor(position);
+    const next = input[Math.min(index + 1, input.length - 1)];
+    output[i] = input[index] + (next - input[index]) * (position - index);
+  }
+  return output;
+};
+
+/** Ask the provider for 16-bit mono PCM, returned at the project's 44.1 kHz. */
 const synthesize = async (provider: VoiceProvider, voice: string, script: string, mood: Mood): Promise<Float32Array> => {
   if (provider === "elevenlabs") {
     const model = process.env.ELEVENLABS_MODEL ?? "eleven_v3";
     const text = model.startsWith("eleven_v3") ? deliveryTags(mood, script) : stripTags(script);
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=pcm_44100`, {
+    // pcm_44100 needs the Pro tier; 24 kHz works on every plan. Pro users can set ELEVENLABS_SAMPLE_RATE=44100.
+    const rate = Number(process.env.ELEVENLABS_SAMPLE_RATE ?? 24000);
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=pcm_${rate}`, {
       method: "POST",
       headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY!, "Content-Type": "application/json", Accept: "audio/pcm" },
       body: JSON.stringify({ text: text.replace(/\n/g, " "), model_id: model }),
@@ -47,7 +63,7 @@ const synthesize = async (provider: VoiceProvider, voice: string, script: string
     const pcm = Buffer.from(await response.arrayBuffer());
     const samples = new Float32Array(Math.floor(pcm.length / 2));
     for (let i = 0; i < samples.length; i++) samples[i] = pcm.readInt16LE(i * 2) / 32768;
-    return samples;
+    return resample(samples, rate);
   }
   const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${process.env.GOOGLE_TTS_API_KEY}`, {
     method: "POST",

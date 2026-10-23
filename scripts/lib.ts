@@ -1,3 +1,4 @@
+import { selectComposition } from "@remotion/renderer";
 import { existsSync } from "node:fs";
 import { scenes } from "../scenes";
 import type { SceneSpec } from "../src/engine/spec";
@@ -34,7 +35,26 @@ export const parseArgs = (argv = process.argv.slice(2)) => {
   return { positional, flags };
 };
 
+type Gl = "swangle" | "angle";
+let gl: Gl = (process.env.TOON_GL as Gl | undefined) ?? (process.platform === "linux" ? "swangle" : "angle");
+
 export const browserOptions = () => ({
   browserExecutable: process.env.TOON_BROWSER ?? null,
-  chromiumOptions: { gl: (process.env.TOON_GL ?? (process.platform === "linux" ? "swangle" : "angle")) as "swangle" | "angle" },
+  chromiumOptions: { gl },
 });
+
+/**
+ * selectComposition, falling back to software WebGL (swangle) if the GPU path crashes the browser
+ * ("Navigation failed because browser has disconnected"). Later browserOptions() calls use whichever worked.
+ */
+export const openComposition = async (options: { serveUrl: string; id: string; inputProps: Record<string, unknown> }) => {
+  try {
+    return await selectComposition({ ...options, ...browserOptions() });
+  } catch (error) {
+    if (process.env.TOON_GL || gl === "swangle") throw error;
+    console.log(`  Browser crashed with gl=${gl} (${(error as Error).message}). Retrying with software WebGL (slower).`);
+    console.log("  To skip this next time: TOON_GL=swangle, or point TOON_BROWSER at your installed Chrome.");
+    gl = "swangle";
+    return selectComposition({ ...options, ...browserOptions() });
+  }
+};
