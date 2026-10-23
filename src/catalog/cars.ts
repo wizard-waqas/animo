@@ -19,7 +19,7 @@ export interface CarShape {
   /** Z center of the cabin. */
   cabinCenter: number;
   rearDoors: boolean;
-  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo";
+  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo" | "police";
 }
 
 export const CARS = {
@@ -62,6 +62,12 @@ export const CARS = {
     length: 4.4, width: 1.9, wheelRadius: 0.37, wheelbase: 2.7,
     bodyBottom: 0.3, beltline: 0.95, roof: 1.68, cabinLength: 2.3, cabinCenter: -0.2, rearDoors: true,
     extra: "taxi-sign",
+  },
+  police: {
+    label: "Police cruiser (black & white, light bar, siren)", color: "#1b1e2b",
+    length: 4.6, width: 1.95, wheelRadius: 0.38, wheelbase: 2.8,
+    bodyBottom: 0.3, beltline: 0.97, roof: 1.7, cabinLength: 2.3, cabinCenter: -0.2, rearDoors: true,
+    extra: "police",
   },
 } satisfies Record<string, CarShape>;
 

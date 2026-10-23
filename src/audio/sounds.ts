@@ -53,39 +53,60 @@ export const honk = (duration: number) => {
   });
 };
 
-/** Big cartoon crash: low boom, crunchy noise, ringing metal, tinkling glass, bits rattling down. */
+/**
+ * Car crash. Built only from noise (no sustained tones — those read as a bell):
+ * - a heavy body thump (very low, ~40ms), the impact itself;
+ * - sheet-metal crunch: several band-limited noise bursts in the 250–2500 Hz range that buckle in
+ *   over ~150ms with rough, grainy amplitude;
+ * - plastic cracks: sharp broadband clicks in the first 100ms;
+ * - glass shatter: a dense spray of tiny high-frequency noise grains that thins out over ~0.6s;
+ * - debris settling: small scattered ticks and scrapes up to ~1.4s.
+ */
 export const crash = (rng: Rng, strength: number) => {
-  const crunch = new Lowpass(2500);
-  const glassFilter = new Highpass(4500);
-  const metal = [430, 1013, 1588, 2290, 3170].map((frequency) => ({
-    frequency: frequency * rng.range(0.94, 1.06), tau: rng.range(0.25, 0.7), level: rng.range(0.08, 0.16),
+  const thumpFilter = new Lowpass(180);
+  const crunchBands = [320, 650, 1100, 1800, 2600].map((frequency) => ({
+    filter: new Bandpass(frequency * rng.range(0.85, 1.15), 1.4),
+    delay: rng.range(0, 0.05),
+    tau: rng.range(0.07, 0.16),
+    level: rng.range(0.5, 0.9),
   }));
-  const pings = Array.from({ length: 22 }, () => {
-    const time = Math.pow(rng.next(), 1.8) * 0.6;
-    return { time, frequency: rng.range(2800, 7500), tau: rng.range(0.04, 0.11), level: rng.range(0.05, 0.13) };
-  });
-  const rattles = Array.from({ length: 12 }, () => ({ time: rng.range(0.25, 1.2), frequency: rng.range(1400, 3200), level: rng.range(0.08, 0.2) }));
-  const rattleFilters = rattles.map((rattle) => new Bandpass(rattle.frequency, 4));
+  const cracks = Array.from({ length: 9 }, () => ({ time: Math.pow(rng.next(), 1.5) * 0.12, level: rng.range(0.3, 0.8) }));
+  const glassHigh = new Highpass(3500);
+  const glassGrains = Array.from({ length: 90 }, () => ({
+    time: 0.015 + Math.pow(rng.next(), 2.2) * 0.65,
+    length: rng.range(0.004, 0.018),
+    level: rng.range(0.15, 0.5),
+  }));
+  const debris = Array.from({ length: 16 }, () => ({ time: rng.range(0.3, 1.4), level: rng.range(0.08, 0.28), filter: new Bandpass(rng.range(900, 3500), 2.5) }));
   let grain = 1;
-  return synth(1.7, (t, i) => {
-    if (i % 300 === 0) grain = 0.35 + 0.65 * rng.next();
-    crunch.set(2500 * decay(t, 0.25) + 500);
-    const boom = Math.sin(TAU * (95 * decay(t, 0.18) + 38) * t) * decay(t, 0.28) * 1.0;
-    const crunchy = crunch.process(rng.noise()) * grain * decay(t, 0.16) * 1.3;
-    let ring = 0;
-    for (const partial of metal) ring += Math.sin(TAU * partial.frequency * t) * partial.level * decay(t, partial.tau);
-    let glass = glassFilter.process(rng.noise()) * decay(t, 0.05) * 0.35;
-    for (const ping of pings) {
-      if (t < ping.time) continue;
-      const age = t - ping.time;
-      glass += Math.sin(TAU * ping.frequency * age) * ping.level * decay(age, ping.tau);
+  return synth(1.6, (t, i) => {
+    if (i % 180 === 0) grain = 0.25 + 0.75 * Math.pow(rng.next(), 0.7);
+    const thump = thumpFilter.process(rng.noise()) * decay(t, 0.045) * 3.2 + Math.sin(TAU * 55 * t) * decay(t, 0.05) * 0.6;
+    let crunch = 0;
+    const raw = rng.noise();
+    for (const band of crunchBands) {
+      const local = t - band.delay;
+      if (local < 0) continue;
+      crunch += band.filter.process(raw) * band.level * decay(local, band.tau) * attack(local, 0.006);
     }
-    let bits = 0;
-    rattles.forEach((rattle, index) => {
-      if (t < rattle.time || t > rattle.time + 0.05) return;
-      bits += rattleFilters[index].process(rng.noise()) * rattle.level * decay(t - rattle.time, 0.01) * 3;
-    });
-    return (boom + crunchy + ring + glass + bits) * attack(t, 0.0015) * strength;
+    crunch *= grain * 1.6;
+    let crack = 0;
+    for (const hit of cracks) {
+      const local = t - hit.time;
+      if (local >= 0 && local < 0.006) crack += rng.noise() * hit.level * decay(local, 0.0015);
+    }
+    const high = glassHigh.process(rng.noise());
+    let glass = 0;
+    for (const piece of glassGrains) {
+      const local = t - piece.time;
+      if (local >= 0 && local < piece.length) glass += high * piece.level * Math.sin((Math.PI * local) / piece.length);
+    }
+    let settle = 0;
+    for (const bit of debris) {
+      const local = t - bit.time;
+      if (local >= 0 && local < 0.04) settle += bit.filter.process(rng.noise()) * bit.level * decay(local, 0.008) * 2;
+    }
+    return (thump + crunch + crack + glass * 0.9 + settle) * attack(t, 0.001) * strength;
   });
 };
 
@@ -145,3 +166,42 @@ export const screech = (rng: Rng) => {
   const squeal = new Squeal(rng);
   return synth(0.9, (t) => squeal.next() * attack(t, 0.03) * decay(Math.max(0, t - 0.5), 0.12) * 0.5);
 };
+
+/** Taser: a pop, then a dense electric crackle over a 60 Hz-ish buzz for `duration` seconds. */
+export const zap = (rng: Rng, duration: number) => {
+  const crackle = new Highpass(1800);
+  const body = new Bandpass(3200, 0.8);
+  let burst = 0;
+  return synth(duration + 0.1, (t, i) => {
+    if (i % 90 === 0) burst = rng.next() < 0.55 ? rng.range(0.4, 1) : 0.05;
+    const buzz = (Math.sin(TAU * 62 * t) > 0 ? 1 : -1) * 0.25 + Math.sin(TAU * 124 * t) * 0.15;
+    const sparks = crackle.process(rng.noise()) * burst * 1.4 + body.process(rng.noise()) * burst * 0.8;
+    const pop = t < 0.02 ? rng.noise() * decay(t, 0.004) * 2 : 0;
+    const envelope = attack(t, 0.01) * (t > duration ? decay(t - duration, 0.03) : 1);
+    return (buzz * 0.5 + sparks + pop) * envelope;
+  });
+};
+
+/** Plastic mount rattling while someone yanks the dashcam. */
+export const rattle = (rng: Rng, duration: number) => {
+  const band = new Bandpass(2200, 3);
+  return synth(duration, (t) => {
+    const yank = Math.abs(Math.sin(TAU * 2.6 * t));
+    const hit = rng.next() < 0.02 + 0.06 * yank ? rng.range(0.4, 1) : 0;
+    return band.process(rng.noise() * hit * 6) * (0.5 + yank) * 0.6;
+  });
+};
+
+/** Police siren "wail": rises and falls over ~3.6 s. Keeps its own phase (pitch changes continuously). */
+export class Siren {
+  private phase = 0;
+  private readonly tone = new Lowpass(3200);
+  next(t: number) {
+    const sweep = 0.5 - 0.5 * Math.cos((TAU * t) / 3.6);
+    const pitch = 650 + 800 * sweep;
+    this.phase = (this.phase + pitch / SAMPLE_RATE) % 1;
+    const square = this.phase < 0.5 ? 1 : -1;
+    const triangle = 4 * Math.abs(this.phase - 0.5) - 1;
+    return this.tone.process(square * 0.35 + triangle * 0.65);
+  }
+}

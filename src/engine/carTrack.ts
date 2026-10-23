@@ -20,6 +20,10 @@ export interface CarState {
   /** Signed speed in m/s. */
   speed: number;
   doors: Record<SeatName, number>;
+  /** Light bar + siren running. */
+  siren: boolean;
+  /** 0..1 how hard someone is yanking the dashcam right now. */
+  dashcamTug: number;
 }
 
 type DriveSegment = {
@@ -55,6 +59,10 @@ export class CarTrack {
   private readonly doorEvents: DoorEvent[] = [];
   readonly impacts: Impact[] = [];
   readonly honks: Honk[] = [];
+  readonly sirenSwitches: { time: number; on: boolean; sound: boolean }[] = [];
+  readonly dashcamTugs: { start: number; end: number }[] = [];
+  /** Drives that start a parked car at an explicit speed (it "enters" moving, usually off screen). */
+  readonly launches: number[] = [];
   private springs: { pitch: Float32Array; roll: Float32Array; heave: Float32Array } | null = null;
   /** Latest time another actor's planning has looked at where this car is. */
   private readUntil = -Infinity;
@@ -110,6 +118,7 @@ export class CarTrack {
     let ramp: number | undefined;
     if (options.fromSpeed !== undefined || options.endSpeed !== undefined) {
       const startSpeed = options.fromSpeed ?? speedNow;
+      if (options.fromSpeed !== undefined && options.fromSpeed > 0.5 && speedNow < 0.5 && start > 0) this.launches.push(start);
       const endSpeed = options.endSpeed ?? startSpeed;
       if (startSpeed + endSpeed < 0.1) throw new Error(`${this.id}: a drive can't start and end at speed 0 — give endSpeed`);
       duration = (2 * path.length) / (startSpeed + endSpeed);
@@ -141,6 +150,30 @@ export class CarTrack {
       kind: "shove", start, plannedEnd: start + duration, cut: Infinity, odometerAtStart: current.odometer,
       fromPos: current.pos, toPos: add2(current.pos, offset), fromHeading: current.heading, toHeading: current.heading + spin,
     });
+    return start + duration;
+  }
+
+  /** Lights on/off; `sound` false keeps the lights flashing with the siren silent. */
+  setSiren(time: number, on: boolean, sound = true) {
+    this.sirenSwitches.push({ time, on, sound: on && sound });
+    this.sirenSwitches.sort((a, b) => a.time - b.time);
+    return time;
+  }
+
+  sirenOn(t: number) {
+    let on = false;
+    for (const change of this.sirenSwitches) if (change.time <= t) on = change.on;
+    return on;
+  }
+
+  sirenSoundOn(t: number) {
+    let sound = false;
+    for (const change of this.sirenSwitches) if (change.time <= t) sound = change.sound;
+    return sound;
+  }
+
+  addDashcamTug(start: number, duration: number) {
+    this.dashcamTugs.push({ start, end: start + duration });
     return start + duration;
   }
 
@@ -278,6 +311,8 @@ export class CarTrack {
       heave: this.sampleSpring("heave", t),
       speed,
       doors,
+      siren: this.sirenOn(t),
+      dashcamTug: this.dashcamTugs.some((tug) => t >= tug.start && t <= tug.end) ? 1 : 0,
     };
   }
 

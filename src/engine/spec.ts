@@ -46,6 +46,8 @@ const characterActions = z.discriminatedUnion("type", [
   z.object({ type: z.literal("enter"), actor: z.string(), car: z.string(), seat: enumOf(SEAT_NAMES) }),
   z.object({ type: z.literal("exit"), actor: z.string() }),
   z.object({ type: z.literal("feel"), actor: z.string(), mood: enumOf(MOOD_NAMES) }),
+  z.object({ type: z.literal("tase"), actor: z.string(), target: z.string(), duration: finite.positive().default(2.4) }),
+  z.object({ type: z.literal("yank-dashcam"), actor: z.string(), car: z.string(), duration: finite.positive().default(3) }),
 ]);
 
 const carActions = z.discriminatedUnion("type", [
@@ -66,6 +68,7 @@ const carActions = z.discriminatedUnion("type", [
     type: z.literal("honk"), actor: z.string(), duration: finite.positive().default(0.4),
     times: z.number().int().min(1).max(5).default(1), word: z.boolean().default(true),
   }),
+  z.object({ type: z.literal("siren"), actor: z.string(), on: z.boolean(), sound: z.boolean().default(true) }),
   z.object({ type: z.literal("hop"), actor: z.string(), height: finite.positive().default(0.6), duration: finite.positive().default(0.7) }),
   z.object({ type: z.literal("door"), actor: z.string(), door: enumOf(SEAT_NAMES), open: z.boolean(), duration: finite.positive().default(0.4) }),
 ]);
@@ -86,6 +89,8 @@ export const shotSchema = z.discriminatedUnion("mode", [
     mode: z.literal("move"), position: vec3Schema, lookAt: focusSchema,
     duration: finite.positive().default(2), ease: enumOf(EASE_NAMES).default("smooth"),
   }),
+  /** Play back earlier footage from a car's dashcam (time from → to), with a REC overlay. */
+  z.object({ mode: z.literal("replay"), car: z.string(), from: finite.min(0), to: finite.positive() }),
 ]);
 
 const sceneActions = z.discriminatedUnion("type", [

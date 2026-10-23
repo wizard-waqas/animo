@@ -137,7 +137,15 @@ export interface ClipDefinition {
   defaultDuration: number;
   description: string;
   pose: (time: number, duration: number) => Pose;
+  /** Body clips that end in a new resting pose (lying down…) keep it until the next body action. */
+  holds?: boolean;
 }
+
+/** Lying flat on the back: hips on the ground, torso tipped back, legs out straight. */
+export const LYING_POSE: Pose = withPose({
+  rootY: -0.6, spineX: -1.48, headX: -0.1, lHipX: 1.5, rHipX: 1.45, lKnee: 0.1, rKnee: 0.25,
+  lShoulderX: 0.2, rShoulderX: -0.1, lShoulderZ: 0.9, rShoulderZ: 1.1, lElbow: 0.4, rElbow: 0.2,
+});
 
 export const CLIPS = {
   wave: {
@@ -219,6 +227,78 @@ export const CLIPS = {
       lShoulderX: 1.0, rShoulderX: 1.0, lShoulderZ: 0.3, rShoulderZ: 0.3, lElbow: 2.2 + 0.08 * wave(t, 11), rElbow: 2.2 + 0.08 * wave(t, 11, 1),
       headX: 0.05, headZ: 0.04 * wave(t, 13), squash: 0.97,
     }),
+  },
+  "hold-neck": {
+    layer: "gesture", defaultDuration: 3, description: "Hurt: hand clutching the back of the neck, head tilted, hunched",
+    pose: (t) => withPose({
+      rShoulderX: 0.35, rShoulderZ: 2.0, rElbow: 2.5, headZ: 0.28 + 0.04 * wave(t, 1.3), headX: 0.12, spineX: 0.14,
+      lShoulderX: 0.5, lShoulderZ: 0.25, lElbow: 1.0,
+    }),
+  },
+  shove: {
+    layer: "gesture", defaultDuration: 0.8, description: "Two-handed shove forward",
+    pose: (t, d) => {
+      const thrust = Math.sin(Math.PI * Math.min(1, t / (d * 0.55)));
+      return withPose({
+        lShoulderX: 0.6 + 0.9 * thrust, rShoulderX: 0.6 + 0.9 * thrust, lShoulderZ: 0.05, rShoulderZ: 0.05,
+        lElbow: 1.6 - 1.5 * thrust, rElbow: 1.6 - 1.5 * thrust, spineX: 0.25 * thrust, headX: -0.1,
+      });
+    },
+  },
+  "cuffed": {
+    layer: "gesture", defaultDuration: 4, description: "Hands cuffed behind the back, head down",
+    pose: () => withPose({ lShoulderX: -0.55, rShoulderX: -0.55, lShoulderZ: -0.02, rShoulderZ: -0.02, lElbow: 1.1, rElbow: 1.1, headX: 0.25, spineX: 0.06 }),
+  },
+  "hands-up": {
+    layer: "gesture", defaultDuration: 2, description: "Hands raised in surrender (or 'whoa, calm down')",
+    pose: () => withPose({ lShoulderZ: 1.9, rShoulderZ: 1.9, lElbow: 1.5, rElbow: 1.5, lShoulderX: 0.3, rShoulderX: 0.3, spineX: -0.08 }),
+  },
+  stagger: {
+    layer: "body", defaultDuration: 1.2, description: "Knocked back: lurches backwards, arms flailing, recovers",
+    pose: (t, d) => {
+      const hit = Math.sin(Math.PI * Math.min(1, t / (d * 0.6)));
+      return withPose({
+        spineX: -0.45 * hit, headX: -0.3 * hit, rootY: -0.05 * hit, lKnee: 0.4 * hit, rKnee: 0.2 * hit, lHipX: -0.3 * hit, rHipX: 0.35 * hit,
+        lShoulderZ: 0.3 + 1.6 * hit + 0.3 * wave(t, 5), rShoulderZ: 0.3 + 1.4 * hit + 0.3 * wave(t, 5, 1), lElbow: 0.8, rElbow: 0.8,
+      });
+    },
+  },
+  "reach-in": {
+    layer: "body", defaultDuration: 3, description: "Leans into a car door, both hands yanking at something inside",
+    pose: (t) => {
+      const yank = Math.abs(wave(t, 2.6));
+      return withPose({
+        spineX: 0.95, headX: -0.5, rootY: -0.06, lKnee: 0.3, rKnee: 0.15, lHipX: 0.15,
+        lShoulderX: 1.55 - 0.25 * yank, rShoulderX: 1.6 - 0.3 * yank, lElbow: 0.3 + 0.9 * yank, rElbow: 0.35 + 0.9 * yank,
+        lShoulderZ: 0.1, rShoulderZ: 0.1, squash: 1 - 0.02 * yank,
+      });
+    },
+  },
+  tased: {
+    layer: "body", defaultDuration: 2.4, holds: true,
+    description: "Tased: rigid and buzzing, then topples flat on the back and stays down",
+    pose: (t, d) => {
+      const rigidEnd = d * 0.5;
+      const buzz = (amount: number) => amount * wave(t, 31);
+      const rigid = withPose({
+        rootY: 0.03 + buzz(0.02), spineX: -0.12 + buzz(0.07), spineZ: buzz(0.06), headX: -0.25 + buzz(0.1), headZ: buzz(0.12),
+        lShoulderZ: 1.3 + buzz(0.15), rShoulderZ: 1.3 + buzz(0.15), lElbow: 0.25, rElbow: 0.25, lKnee: 0.05, rKnee: 0.05, squash: 1.03,
+      });
+      if (t < rigidEnd) return rigid;
+      const fall = Math.min(1, (t - rigidEnd) / (d * 0.3));
+      const toppled = blendPose(rigid, LYING_POSE, fall * fall);
+      // A couple of twitches once down.
+      const twitch = t > rigidEnd + d * 0.3 ? 0.06 * Math.max(0, wave(t, 7)) * Math.exp(-(t - rigidEnd) * 2) : 0;
+      return { ...toppled, lShoulderZ: toppled.lShoulderZ + twitch, headZ: toppled.headZ + twitch };
+    },
+  },
+  "get-up": {
+    layer: "body", defaultDuration: 1.6, description: "Gets up off the ground (use after tased / fall-over held poses)",
+    pose: (t, d) => {
+      const up = Math.min(1, t / d);
+      const crouch = withPose({ rootY: -0.3, spineX: 0.5, lKnee: 1.5, rKnee: 1.5, lHipX: 1.1, rHipX: 1.1, lShoulderX: 0.9, rShoulderX: 0.9, lElbow: 0.6, rElbow: 0.6 });
+      return up < 0.5 ? blendPose(LYING_POSE, crouch, up * 2) : blendPose(crouch, NEUTRAL_POSE, (up - 0.5) * 2);
+    },
   },
   jump: {
     layer: "body", defaultDuration: 1.0, description: "Crouch, jump with arms up, squash on landing",

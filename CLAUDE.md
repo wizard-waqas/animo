@@ -37,8 +37,8 @@ procedural (built from primitives in code) — no model files, nothing to downlo
 - Sets (`src/catalog/sets.ts` has exact layouts): road along X centered on z=0. Lanes: z=+1.8 heading +X,
   z=-1.8 heading -X. Suburb houses at z=-16, driveways at x=0, ±16, ±32. Parking lot asphalt x -35..35, z -28..16.
   The front (z > 6) is kept clear for cameras.
-- Highway set: eastbound lanes z=1.8 (fast) and z=5.4, shoulder 7.2–9.4, guardrail z=10, median barrier z=-0.6,
-  westbound lanes empty (good camera spot, z≈-3…-11, look down over the barrier).
+- Highway set (forest highway): eastbound lanes z=1.8 (fast) and z=5.4, shoulders z≈-0.6 and 8.3, guardrails
+  z=-1.3 and 10, walls of 7–10m pines beyond both. Cameras must stay in the corridor (z -1…11) or above y≈11.
 - Sizes: people ~1.6–1.8m (kid ~1.1m). Sedan 4.4×1.9m. Walk 1.55 m/s, run 3.4 m/s. Default drive speed 8 m/s.
 
 ## Writing scenes (`src/engine/dsl.ts`)
@@ -108,9 +108,18 @@ Don't pass `duration` to `say()` — let the recording set it. Mouths lip-sync t
 Default voices per character model are in `src/voice/voices.ts`; override with `character(..., { voice: "<id>" })`.
 `npm run voices -- --list` shows the account's voices. Switching provider → `--force` to re-record.
 
+Police & drama: `police` car model (black & white, light bar) — `siren(true)` lights + wail, `siren(true, {sound:false})`
+lights only. Officers: `officer`, `officer-woman`. `cop.tase(person)` → wires + crackle + zap sound, target goes rigid
+and falls flat (held pose — next body action blends out; use `play("get-up")`). `person.yankDashcam(car)` runs to the
+driver door, opens it, leans in yanking; the dashcam rattles. `camera.replay(car, {from, to})` cuts to that car's
+dashcam footage of an earlier moment (REC overlay, original audio through a "small screen" filter); add a camera
+shot right after it. Clips that `holds` (tased) keep their end pose until the next body action.
+Only body actions (walk, body clips, enter/exit, drives…) need to be listed in time order per actor; say/feel/
+gestures/honk/siren/door can be listed anywhere.
+
 Faces: `person.feel(mood)` — neutral, happy, angry (V brows, red flush, shouting mouth), scared (wide eyes,
-sweat drop, trembling), shocked, smug, sad. Blends over 0.25s. Pair with clips: `yell` (gesture), `cower` (body),
-`arms-crossed`, `point`, `facepalm`…
+sweat drop, trembling), shocked, smug, sad, pain (wince), dazed (eyes shut). Blends over 0.25s. Pair with clips: `yell`, `hold-neck`, `shove`, `cuffed`,
+`hands-up` (gestures), `cower`, `stagger`, `reach-in`, `tased`, `get-up` (body), `arms-crossed`, `point`, `facepalm`…
 
 Sound (all generated, `src/audio/`): footsteps on every foot plant (heavier when running), engine pitch/volume from
 speed (idle if someone's inside), tire rumble, squeal on hard braking (> ~4.5 m/s²), door open/slam on enter/exit,

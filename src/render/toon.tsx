@@ -7,7 +7,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
  * Geometries and materials are cached so re-rendering every frame stays cheap.
  */
 
-const gradientMap = (() => {
+export const toonGradient = (() => {
   const steps = new Uint8Array([125, 195, 255]);
   const texture = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat);
   texture.minFilter = THREE.NearestFilter;
@@ -24,7 +24,7 @@ export const toonMaterial = (color: string, options: { opacity?: number; emissiv
   if (!material) {
     material = new THREE.MeshToonMaterial({
       color,
-      gradientMap,
+      gradientMap: toonGradient,
       transparent: options.opacity !== undefined && options.opacity < 1,
       opacity: options.opacity ?? 1,
       depthWrite: options.opacity === undefined || options.opacity >= 1,

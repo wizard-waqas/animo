@@ -16,10 +16,12 @@ interface CarModelProps {
   night?: boolean;
   dashcam?: boolean;
   time: number;
+  /** Filming from inside this car (dashcam replay): hide the cabin and dashcam, keep the hood in view. */
+  insideView?: boolean;
 }
 
 /** Procedural cartoon car. Forward is +Z; the driver (left) side is +X. */
-export const CarModel = ({ shape, color, state, label, night, dashcam, time }: CarModelProps) => {
+export const CarModel = ({ shape, color, state, label, night, dashcam, time, insideView }: CarModelProps) => {
   const wheelX = shape.width / 2 - 0.12;
   const wheelZ = shape.wheelbase / 2;
   const bodyHeight = shape.beltline - shape.bodyBottom;
@@ -35,28 +37,48 @@ export const CarModel = ({ shape, color, state, label, night, dashcam, time }: C
       {/* Chassis rides on the springs: heave, pitch and roll come from the suspension sim. */}
       <group position={[0, state.heave, 0]} rotation={[state.pitch, 0, state.roll]} scale={[1, 1 + state.heave * 0.8, 1]}>
         <Part geometry={shapes.box(shape.width, bodyHeight, shape.length, 0.22)} color={color} position={[0, bodyY, 0]} />
-        <Cabin shape={shape} color={color} />
+        {!insideView && <Cabin shape={shape} color={color} />}
         <FrontAndBack shape={shape} night={night} />
         {availableSeats(shape).map((seat) => (
-          <Door key={seat} shape={shape} seat={seat} color={color} openness={state.doors[seat]} />
+          <Door key={seat} shape={shape} seat={seat} color={shape.extra === "police" ? "#f8f9fa" : color} openness={state.doors[seat]} />
         ))}
+        {shape.extra === "police" && <LightBar shape={shape} on={state.siren} time={time} />}
         {label && <DoorLabels shape={shape} text={label} />}
         <Extras shape={shape} color={color} />
-        {dashcam && <Dashcam shape={shape} time={time} />}
+        {dashcam && !insideView && <Dashcam shape={shape} time={time} tug={state.dashcamTug} />}
       </group>
     </group>
   );
 };
 
 /** Little camera behind the rear-view mirror with a blinking red record light. */
-const Dashcam = ({ shape, time }: { shape: CarShape; time: number }) => {
+const Dashcam = ({ shape, time, tug }: { shape: CarShape; time: number; tug: number }) => {
   const front = shape.cabinCenter + shape.cabinLength / 2;
   const recording = time % 1 < 0.6;
+  // Being yanked: rattles on its mount.
+  const shake = tug * 0.05;
   return (
-    <group position={[0.12, shape.roof - 0.26, front - 0.16]}>
+    <group
+      position={[0.12 + shake * Math.sin(time * 47), shape.roof - 0.26 - shake * Math.abs(Math.sin(time * 31)), front - 0.16 - shake * 0.6 * Math.abs(Math.sin(time * 23))]}
+      rotation={[tug * 0.35 * Math.sin(time * 29), tug * 0.4 * Math.sin(time * 37), tug * 0.3 * Math.sin(time * 41)]}
+    >
       <Part geometry={shapes.box(0.22, 0.13, 0.1, 0.03)} color="#1d1b26" outline={0.008} />
       <Part geometry={shapes.cylinder(0.04, 0.04, 0.04, 12)} color="#3a3a4a" position={[0, 0, 0.06]} rotation={[Math.PI / 2, 0, 0]} outline={false} />
       <Part geometry={shapes.sphere(0.022)} color={recording ? "#ff1744" : "#5a1020"} emissive={recording ? "#ff1744" : undefined} position={[-0.07, 0.04, 0.055]} outline={false} shadow={false} />
+    </group>
+  );
+};
+
+/** Roof light bar: red and blue halves flashing alternately while the siren is on. */
+const LightBar = ({ shape, on, time }: { shape: CarShape; on: boolean; time: number }) => {
+  const phase = Math.floor(time * 6) % 2 === 0;
+  const red = on && phase;
+  const blue = on && !phase;
+  return (
+    <group position={[0, shape.roof + 0.09, shape.cabinCenter + 0.1]}>
+      <Part geometry={shapes.box(1.25, 0.08, 0.3, 0.03)} color="#2b2d42" outline={0.01} />
+      <Part geometry={shapes.box(0.56, 0.14, 0.26, 0.05)} color={red ? "#ff2d2d" : "#8a1c1c"} emissive={red ? "#ff1a1a" : undefined} position={[0.31, 0.1, 0]} outline={0.01} shadow={false} />
+      <Part geometry={shapes.box(0.56, 0.14, 0.26, 0.05)} color={blue ? "#2d6bff" : "#1c2f8a"} emissive={blue ? "#1a4dff" : undefined} position={[-0.31, 0.1, 0]} outline={0.01} shadow={false} />
     </group>
   );
 };

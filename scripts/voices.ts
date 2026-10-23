@@ -31,7 +31,7 @@ const pickProvider = (): VoiceProvider | undefined => {
   return undefined;
 };
 
-const SPEAKING_RATE: Record<Mood, number> = { neutral: 1, happy: 1.05, angry: 1.12, scared: 1.15, shocked: 1.05, smug: 0.95, sad: 0.9 };
+const SPEAKING_RATE: Record<Mood, number> = { neutral: 1, happy: 1.05, angry: 1.12, scared: 1.15, shocked: 1.05, smug: 0.95, sad: 0.9, pain: 0.95, dazed: 0.85 };
 
 /** Ask the provider for 16-bit mono PCM at 44.1 kHz. */
 const synthesize = async (provider: VoiceProvider, voice: string, script: string, mood: Mood): Promise<Float32Array> => {

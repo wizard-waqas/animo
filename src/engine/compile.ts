@@ -5,6 +5,7 @@ import { type CameraState, CameraTrack } from "./cameraTrack";
 import { type CarState, CarTrack } from "./carTrack";
 import { type CharacterState, CharacterTrack, headHeight } from "./characterTrack";
 import { voiceIdentity } from "../voice/voices";
+import { clipDefinition } from "./pose";
 import { type Vec2, type Vec3, DEG, add2, clamp, distance2, headingOf, length2, rotate2, scale2, sub2 } from "./math";
 import { type Action, type SceneSpec, type SoundName, type Target, FORMAT_SIZES } from "./spec";
 
@@ -16,6 +17,9 @@ export interface Caption { start: number; end: number; text: string; position: "
 export interface Crash { time: number; point: Vec3; speed: number; direction: Vec2; colors: string[]; cars: string[] }
 /** Comic onomatopoeia popping up in the scene ("HONK!", "CRASH!"). */
 export interface Word { text: string; start: number; end: number; actor?: string; point?: Vec3; style: "crash" | "honk" }
+/** A taser shot: wires from the officer's hand to the target; crackling electricity while `zapEnd` hasn't passed. */
+export interface Zap { start: number; zapEnd: number; wiresEnd: number; officer: string; target: string }
+
 /** One-off sound placed with sound(...). */
 export interface SoundCue { time: number; name: SoundName; point?: Vec3; volume: number }
 
@@ -29,6 +33,7 @@ export interface CompiledScene {
   crashes: Crash[];
   words: Word[];
   soundCues: SoundCue[];
+  zaps: Zap[];
   timeline: TimelineRow[];
   warnings: string[];
 }
@@ -43,6 +48,9 @@ export interface FrameState {
   /** Crashes that have happened by time t (their effects play out after `time`). */
   crashes: Crash[];
   words: (Word & { point: Vec3 })[];
+  zaps: { hand: Vec3; body: Vec3; electrified: boolean; t: number }[];
+  /** Set while showing dashcam footage: the scene is shown as it was at `sourceTime`. */
+  replay?: { car: string; sourceTime: number; progress: number };
 }
 
 const fmt = (n: number) => (Math.round(n * 100) / 100).toString();
@@ -149,6 +157,18 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   const crashes: Crash[] = [];
   const words: Word[] = [];
   const soundCues: SoundCue[] = [];
+  const zaps: Zap[] = [];
+  camera.dashcamPose = (carId, t) => {
+    const track = cars[carId];
+    if (!track) throw new Error(`replay: "${carId}" is not a car`);
+    const { pos, heading } = track.kinematics(t);
+    const front = track.shape.cabinCenter + track.shape.cabinLength / 2;
+    const lift = track.lift(t);
+    // At the dashcam's lens (the cabin is hidden while replaying), looking a little down the road.
+    const eye = add2(pos, rotate2([0.12, front - 0.05], heading));
+    const ahead = add2(pos, rotate2([0.12, front + 25], heading));
+    return { position: [eye[0], track.shape.roof - 0.28 + lift, eye[1]], lookAt: [ahead[0], track.shape.roof - 1.3 + lift, ahead[1]] };
+  };
   const carColor = (id: string) => {
     const actor = spec.cast[id];
     return actor.kind === "car" ? actor.color ?? CARS[actor.model].color : "#888888";
@@ -305,6 +325,39 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
         return { end: characters[action.actor].addExit(start), label: "get out of car" };
       case "feel":
         return { end: characters[action.actor].addMood(start, action.mood), label: `feels ${action.mood}` };
+      case "tase": {
+        const officer = characters[action.actor];
+        const target = characters[action.target];
+        if (!target) throw new Error(`${action.actor}.tase: "${action.target}" is not a person in the cast`);
+        target.markRead(start);
+        const here = officer.state(start).pos;
+        const there = target.state(start).pos;
+        const aimed = officer.addTurn(start, headingOf(sub2([there[0], there[2]], [here[0], here[2]])), 0.3);
+        officer.addClip(start, "point", aimed - start + action.duration);
+        target.addMood(aimed, "shocked");
+        const down = target.addClip(aimed, "tased", action.duration);
+        target.addMood(aimed + action.duration * 0.75, "dazed");
+        zaps.push({ start: aimed, zapEnd: aimed + action.duration * 0.6, wiresEnd: down + 1.2, officer: action.actor, target: action.target });
+        return { end: down, label: `tases ${action.target}` };
+      }
+      case "yank-dashcam": {
+        const person = characters[action.actor];
+        const vehicle = cars[action.car];
+        if (!vehicle) throw new Error(`${action.actor}.yankDashcam: "${action.car}" is not a car`);
+        vehicle.markRead(start);
+        const door = vehicle.seatWorld("driver", start);
+        const here = person.state(start).pos;
+        let reachStart = start;
+        if (distance2([here[0], here[2]], door.doorStand) > 0.3) {
+          reachStart = person.addWalk(start, door.doorStand, { run: true, endFacing: door.heading - door.side * 90 * DEG });
+        }
+        vehicle.addDoor("driver", reachStart, true, 0.35);
+        const end = person.addClip(reachStart + 0.3, "reach-in", action.duration);
+        vehicle.addDashcamTug(reachStart + 0.5, action.duration - 0.4);
+        return { end, label: `yanks at ${action.car}'s dashcam` };
+      }
+      case "siren":
+        return { end: cars[action.actor].setSiren(start, action.on, action.sound), label: `siren ${action.on ? (action.sound ? "on" : "lights only") : "off"}` };
       case "sound":
         soundCues.push({ time: start, name: action.name, point: action.at, volume: action.volume });
         return { end: start, label: `sound "${action.name}"` };
@@ -335,12 +388,16 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   for (const entry of ordered) {
     const actor = entry.action.actor;
     const start = startOf(entry);
-    if (lastStart[actor] !== undefined && start < lastStart[actor] - 1e-9) {
+    // Only actions that move the body/vehicle must be listed in time order; speech, moods, gestures,
+    // honks and sirens are separate layers and can be listed anywhere.
+    const layered = ["say", "feel", "honk", "siren", "door"].includes(entry.action.type)
+      || (entry.action.type === "clip" && clipDefinition(entry.action.clip).layer === "gesture");
+    if (!layered && lastStart[actor] !== undefined && start < lastStart[actor] - 1e-9) {
       throw new Error(`${actor}: actions must be listed in time order (one starts at ${fmt(start)}s after one at ${fmt(lastStart[actor])}s)`);
     }
     const { end, label: actionLabel } = runAction(entry.action, start);
     const label = entry.id ? `${actionLabel}  #${entry.id}` : actionLabel;
-    lastStart[actor] = start;
+    if (!layered) lastStart[actor] = start;
     lastEnd[actor] = end;
     if (entry.id) cueEnd[entry.id] = end;
     timeline.push({ actor, label, start, end });
@@ -359,10 +416,13 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   warnings.push(...findCollisions(spec.duration, cars, characters));
 
   timeline.sort((a, b) => a.start - b.start || a.actor.localeCompare(b.actor));
-  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, timeline, warnings };
+  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, zaps, timeline, warnings };
 };
 
-export const evaluateScene = (scene: CompiledScene, t: number): FrameState => {
+export const evaluateScene = (scene: CompiledScene, realTime: number): FrameState => {
+  // During dashcam footage the world is shown as it was earlier; the camera rides inside the car.
+  const replay = scene.camera.replayAt(realTime);
+  const t = replay ? replay.sourceTime : realTime;
   const cars: Record<string, CarState> = {};
   for (const [id, track] of Object.entries(scene.cars)) cars[id] = track.state(t);
   const characters: Record<string, CharacterState> = {};
@@ -370,6 +430,7 @@ export const evaluateScene = (scene: CompiledScene, t: number): FrameState => {
   for (const [id, track] of Object.entries(scene.characters)) {
     const state = track.state(t);
     characters[id] = state;
+    if (replay) continue;
     for (const speech of track.speech) {
       if (t < speech.start || t > speech.end) continue;
       const head: Vec3 = [state.pos[0], state.pos[1] + headHeight(scene.looks[id]) + 0.35, state.pos[2]];
@@ -379,21 +440,44 @@ export const evaluateScene = (scene: CompiledScene, t: number): FrameState => {
     }
   }
   const words: FrameState["words"] = [];
-  for (const word of scene.words) {
+  for (const word of replay ? [] : scene.words) {
     if (t < word.start || t > word.end) continue;
     const car = word.actor ? cars[word.actor] : undefined;
     const point: Vec3 = word.point ?? (car ? [car.pos[0], 1.9 + car.lift, car.pos[1]] : [0, 2, 0]);
     words.push({ ...word, point });
   }
+  const zaps: FrameState["zaps"] = [];
+  for (const zap of scene.zaps) {
+    if (t < zap.start || t > zap.wiresEnd) continue;
+    const officer = characters[zap.officer];
+    const target = characters[zap.target];
+    const officerHeight = scene.looks[zap.officer].height;
+    const forward = rotate2([0, 1], officer.facing);
+    const right = rotate2([-1, 0], officer.facing);
+    const hand: Vec3 = [officer.pos[0] + forward[0] * 0.62 + right[0] * 0.24, officer.pos[1] + 1.2 * officerHeight, officer.pos[2] + forward[1] * 0.62 + right[1] * 0.24];
+    // Torso follows the target's pose as they topple: hips, then up the (tilting) spine.
+    const targetHeight = scene.looks[zap.target].height;
+    const hip = (0.72 + target.pose.rootY) * targetHeight;
+    const lean = target.pose.spineX;
+    const targetForward = rotate2([0, 1], target.facing);
+    const body: Vec3 = [
+      target.pos[0] + targetForward[0] * Math.sin(lean) * 0.3 * targetHeight,
+      target.pos[1] + hip + Math.cos(lean) * 0.3 * targetHeight,
+      target.pos[2] + targetForward[1] * Math.sin(lean) * 0.3 * targetHeight,
+    ];
+    zaps.push({ hand, body, electrified: t < zap.zapEnd, t });
+  }
   return {
     t,
     cars,
     characters,
-    camera: scene.camera.state(t),
-    captions: scene.captions.filter((caption) => t >= caption.start && t <= caption.end),
+    camera: scene.camera.state(realTime),
+    captions: replay ? [] : scene.captions.filter((caption) => realTime >= caption.start && realTime <= caption.end),
     bubbles,
     crashes: scene.crashes.filter((crash) => t >= crash.time),
     words,
+    zaps,
+    replay: replay && { car: replay.car, sourceTime: replay.sourceTime, progress: (realTime - replay.start) / (replay.end - replay.start) },
   };
 };
 
@@ -469,7 +553,9 @@ const findSpeedJumps = (duration: number, cars: Record<string, CarTrack>) => {
   const warnings: string[] = [];
   const step = 1 / 30;
   for (const [id, car] of Object.entries(cars)) {
-    const nearImpact = (t: number) => car.impacts.some((impact) => t > impact.time - 0.25 && t < impact.time + 0.25);
+    const nearImpact = (t: number) =>
+      car.impacts.some((impact) => t > impact.time - 0.25 && t < impact.time + 0.25)
+      || car.launches.some((launch) => t > launch - 0.25 && t < launch + 0.25);
     // Stop short of the end: the speed estimate looks slightly past t, and nothing moves after the scene ends.
     for (let t = 0.1; t < duration - step - 0.05; t += step) {
       if (nearImpact(t)) continue;
@@ -510,13 +596,19 @@ export const findJolts = (scene: CompiledScene, fps = 60) => {
   const near = (t: number, windows: (readonly [number, number])[]) =>
     windows.some(([start, end]) => t > start - margin && t < end + margin) ||
     windows.some(([start, end]) => Math.abs(t - start) < margin || Math.abs(t - end) < margin);
-  const cameraSkips = [...scene.camera.cutTimes().map((cut) => [cut, cut] as const), ...scene.camera.shakeWindows()];
+  const replays = scene.camera.replayWindows().map((window) => [window.start, window.end] as const);
+  const cameraSkips = [...scene.camera.cutTimes().map((cut) => [cut, cut] as const), ...scene.camera.shakeWindows(), ...replays];
   const skipsFor = (key: string) => {
     if (key.startsWith("camera")) return cameraSkips;
+    if (scene.camera.replayWindows().length) return [...replays, ...skipsForActor(key)];
+    return skipsForActor(key);
+  };
+  const skipsForActor = (key: string) => {
     // Hop takeoffs/landings are meant to be sudden — for the car and anyone riding in it.
     const hopMoments = (car: CarTrack) => [
       ...car.hopWindows().flatMap(([start, end]) => [[start, start], [end, end]] as const),
       ...car.impactWindows(),
+      ...car.launches.map((launch) => [launch, launch] as const),
     ];
     if (scene.cars[key]) return hopMoments(scene.cars[key]);
     return Object.values(scene.cars).flatMap(hopMoments);

@@ -19,6 +19,8 @@ export const DEFAULT_VOICES: Record<VoiceProvider, Record<CharacterModel, string
     grandpa: "pqHfZKP75CvOlQylNhV4", // Bill: older, warm
     grandma: "XrExE9yKIg1WjnnlVkGX", // Matilda: warm
     mechanic: "bIHbv24MWmeRgasZH58o", // Will: friendly
+    officer: "cjVigY5qzO86Huf0OWal", // Eric: firm, authoritative
+    "officer-woman": "Xb7hH8MSUJpSbSDYk0k2", // Alice: clear, confident
   },
   google: {
     "casual-guy": "en-US-Chirp3-HD-Puck",
@@ -29,6 +31,8 @@ export const DEFAULT_VOICES: Record<VoiceProvider, Record<CharacterModel, string
     grandpa: "en-US-Chirp3-HD-Algenib",
     grandma: "en-US-Chirp3-HD-Gacrux",
     mechanic: "en-US-Chirp3-HD-Fenrir",
+    officer: "en-US-Chirp3-HD-Orus",
+    "officer-woman": "en-US-Chirp3-HD-Despina",
   },
 };
 

@@ -52,7 +52,7 @@ export const deliveryTags = (mood: Mood, text: string) => {
   const shouting = /!!|[A-Z]{3,}/.test(text);
   const tag: Record<Mood, string> = {
     neutral: "", happy: "[happy] ", angry: shouting ? "[shouting] [angry] " : "[angry] ", scared: "[nervous] [scared] ",
-    shocked: "[surprised] ", smug: "[confident] [smug] ", sad: "[sad] ",
+    shocked: "[surprised] ", smug: "[confident] [smug] ", sad: "[sad] ", pain: "[pained] [groaning] ", dazed: "[groggy] ",
   };
   return `${tag[mood]}${text}`;
 };

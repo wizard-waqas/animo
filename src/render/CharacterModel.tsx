@@ -76,6 +76,12 @@ const Torso = ({ look }: { look: CharacterLook }) => {
         </>
       )}
       {hasTie && <Part geometry={shapes.box(0.07, 0.32, 0.03, 0.015)} color={look.accent ?? "#c1121f"} position={[0, 0.34, 0.155]} outline={0.01} />}
+      {look.accessories.includes("badge") && (
+        <>
+          <Part geometry={shapes.cylinder(0.045, 0.045, 0.02, 6)} color="#ffd166" position={[0.11 * look.build, 0.4, 0.158]} rotation={[Math.PI / 2, 0, 0]} outline={0.006} shadow={false} />
+          <Part geometry={shapes.box(0.36 * look.build, 0.07, 0.31, 0.03)} color="#111111" position={[0, 0.03, 0]} outline={false} />
+        </>
+      )}
     </>
   );
 };
@@ -270,6 +276,14 @@ const Accessories = ({ look }: { look: CharacterLook }) => {
         <>
           <Part shadow={false} geometry={shapes.sphere(r + 0.03)} color={look.accent ?? "#e63946"} position={[0, 0.09, -0.02]} scale={[1, 0.72, 1]} />
           <Part shadow={false} geometry={shapes.box(0.36, 0.035, 0.22, 0.015)} color={look.accent ?? "#e63946"} position={[0, 0.13, 0.27]} />
+        </>
+      )}
+      {look.accessories.includes("police-cap") && (
+        <>
+          <Part geometry={shapes.cylinder(0.3, 0.27, 0.16, 20)} color={look.accent ?? "#16213e"} position={[0, 0.25, -0.01]} rotation={[-0.08, 0, 0]} shadow={false} />
+          <Part geometry={shapes.cylinder(0.27, 0.27, 0.04, 20)} color="#111111" position={[0, 0.18, 0]} outline={false} shadow={false} />
+          <Part geometry={shapes.box(0.32, 0.03, 0.17, 0.012)} color="#111111" position={[0, 0.17, 0.27]} rotation={[0.25, 0, 0]} shadow={false} />
+          <Part geometry={shapes.cylinder(0.035, 0.035, 0.02, 6)} color="#ffd166" position={[0, 0.27, 0.28]} rotation={[Math.PI / 2 - 0.1, 0, 0]} outline={0.005} shadow={false} />
         </>
       )}
       {look.accessories.includes("bow") && (

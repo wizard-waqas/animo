@@ -147,3 +147,27 @@ export const DebugHud = ({ frame, width, height, fps }: { frame: FrameState; wid
     </AbsoluteFill>
   );
 };
+
+/** Dashcam footage look: REC dot, timestamp, speed, scanlines, vignette and a frame like a phone screen. */
+export const DashcamOverlay = ({ replay, width, height }: { replay: NonNullable<FrameState["replay"]>; width: number; height: number }) => {
+  const unit = Math.min(width, height) / 1080;
+  const seconds = 8 * 3600 + 42 * 60 + 5 + replay.sourceTime;
+  const clock = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), Math.floor(seconds % 60)].map((n) => String(n).padStart(2, "0")).join(":");
+  const recording = replay.sourceTime % 1 < 0.6;
+  const fadeIn = clamp01(replay.progress * 12);
+  return (
+    <AbsoluteFill style={{ fontFamily: "Menlo, 'Courier New', monospace", pointerEvents: "none", opacity: fadeIn }}>
+      <AbsoluteFill style={{ background: "repeating-linear-gradient(0deg, rgba(0,0,0,0.13) 0px, rgba(0,0,0,0.13) 2px, transparent 2px, transparent 5px)" }} />
+      <AbsoluteFill style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
+      <AbsoluteFill style={{ border: `${14 * unit}px solid #111`, borderRadius: 40 * unit }} />
+      <div style={{ position: "absolute", top: 70 * unit, left: 60 * unit, display: "flex", alignItems: "center", gap: 14 * unit, color: "#fff", fontSize: 46 * unit, fontWeight: 700, textShadow: "0 0 6px #000" }}>
+        <div style={{ width: 30 * unit, height: 30 * unit, borderRadius: "50%", background: recording ? "#ff1744" : "transparent", boxShadow: recording ? "0 0 12px #ff1744" : "none" }} />
+        REC
+      </div>
+      <div style={{ position: "absolute", top: 70 * unit, right: 60 * unit, color: "#fff", fontSize: 40 * unit, textShadow: "0 0 6px #000" }}>DASHCAM · FRONT</div>
+      <div style={{ position: "absolute", bottom: 80 * unit, left: 60 * unit, color: "#fff", fontSize: 40 * unit, lineHeight: 1.4, textShadow: "0 0 6px #000" }}>
+        2026-10-23&nbsp;&nbsp;{clock}
+      </div>
+    </AbsoluteFill>
+  );
+};

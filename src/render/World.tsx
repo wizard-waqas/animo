@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { Vec3 } from "../engine/math";
 import { SET_PROPS } from "../catalog/sets";
 import type { PropSpec, SetName } from "../engine/spec";
+import { Forest } from "./Forest";
 import { Prop } from "./Props";
 import type { StylePreset } from "./styles";
 import { Part, shapes } from "./toon";
@@ -18,7 +19,9 @@ export const World = ({ style, set, props, focus, debug }: { style: StylePreset;
       <hemisphereLight args={[style.ambientSky, style.ambientGround, style.ambientIntensity]} />
       <Sun style={style} focus={focus} />
       <Ground style={style} set={set} />
-      {setProps.map((prop, index) => (
+      {/* Trees are instanced (cheap even by the hundred); everything else is a regular prop. */}
+      <Forest trees={setProps.filter((prop) => prop.type === "tree" || prop.type === "pine")} />
+      {setProps.filter((prop) => prop.type !== "tree" && prop.type !== "pine").map((prop, index) => (
         <Prop key={index} prop={prop} night={style.night} />
       ))}
       {debug && <gridHelper args={[60, 60, "#ff006e", "#c8c8c8"]} position={[0, 0.08, 0]} />}
@@ -153,29 +156,30 @@ const LongBox = ({ length, size, radius, color, position }: { length: number; si
 const HIGHWAY_DASHES = Array.from({ length: 160 }, (_, i) => -400 + i * 5);
 const GUARDRAIL_POSTS = Array.from({ length: 160 }, (_, i) => -400 + i * 5);
 const HILLS: [number, number, number, string][] = [
-  [-180, -110, 40, "#7cc464"], [-60, -130, 55, "#86cf6c"], [70, -115, 45, "#73b95b"], [190, -125, 50, "#80c766"], [-260, -120, 45, "#6fb457"],
+  [-180, -110, 40, "#5e9f4d"], [-60, -130, 55, "#689f52"], [70, -115, 45, "#5a9a48"], [190, -125, 50, "#63a24f"], [-260, -120, 45, "#578f45"],
 ];
 
 /**
- * Divided highway along X. Eastbound (+X): lanes z = 1.8 and 5.4. Westbound: z = -3 and -6.6.
- * Concrete median barrier at z = -0.6, guardrail at z = 10.
+ * Forest highway along X. Eastbound (+X) lanes z = 1.8 and 5.4, shoulders z -1.0…0 and 7.2…9.4,
+ * guardrails at z = -1.3 and 10, walls of tall pines beyond both. The westbound road sits behind the
+ * left tree line (z ≈ -18), glimpsed between trunks.
  */
 const Highway = ({ style }: { style: StylePreset }) => (
   <>
-    <Part geometry={shapes.plane(800, 19.6)} color={style.asphalt} position={[0, 0.03, -0.4]} outline={false} />
+    <Part geometry={shapes.plane(800, 10.6)} color={style.asphalt} position={[0, 0.03, 4.2]} outline={false} />
+    <Part geometry={shapes.plane(800, 8)} color={style.asphalt} position={[0, 0.03, -19]} outline={false} />
     {HIGHWAY_DASHES.map((x) => (
-      <group key={x}>
-        <Part geometry={shapes.plane(2.6, 0.16)} color="#f8f9fa" position={[x, 0.06, 3.6]} outline={false} shadow={false} />
-        <Part geometry={shapes.plane(2.6, 0.16)} color="#f8f9fa" position={[x, 0.06, -4.8]} outline={false} shadow={false} />
+      <Part key={x} geometry={shapes.plane(2.6, 0.16)} color="#f8f9fa" position={[x, 0.06, 3.6]} outline={false} shadow={false} />
+    ))}
+    <Part geometry={shapes.plane(800, 0.18)} color="#ffd166" position={[0, 0.06, 0.05]} outline={false} shadow={false} />
+    <Part geometry={shapes.plane(800, 0.18)} color="#f8f9fa" position={[0, 0.06, 7.2]} outline={false} shadow={false} />
+    {[-1.3, 10].map((z) => (
+      <group key={z}>
+        <LongBox length={800} size={[0.32, 0.08]} radius={0.03} color="#adb5bd" position={[0, 0.62, z]} />
+        {GUARDRAIL_POSTS.map((x) => (
+          <Part key={x} geometry={shapes.box(0.12, 0.7, 0.12, 0.02)} color="#868e96" position={[x, 0.35, z + (z > 0 ? 0.05 : -0.05)]} outline={false} />
+        ))}
       </group>
-    ))}
-    {[7.2, 0.25, -1.45, -8.4].map((z) => (
-      <Part key={z} geometry={shapes.plane(800, 0.18)} color={z === 7.2 || z === -8.4 ? "#f8f9fa" : "#ffd166"} position={[0, 0.06, z]} outline={false} shadow={false} />
-    ))}
-    <LongBox length={800} size={[0.85, 0.55]} radius={0.12} color="#c9c5bb" position={[0, 0.43, -0.6]} />
-    <LongBox length={800} size={[0.32, 0.08]} radius={0.03} color="#adb5bd" position={[0, 0.62, 10]} />
-    {GUARDRAIL_POSTS.map((x) => (
-      <Part key={x} geometry={shapes.box(0.12, 0.7, 0.12, 0.02)} color="#868e96" position={[x, 0.35, 10.05]} outline={false} />
     ))}
     {HILLS.map(([x, z, radius, color]) => (
       <Part key={x} geometry={shapes.sphere(radius)} color={color} position={[x, -radius * 0.6, z]} scale={[1.6, 1, 1]} outline={false} shadow={false} />

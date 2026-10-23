@@ -29,6 +29,10 @@ export const MOODS = {
   shocked: { browTilt: 0.15, browRaise: 0.05, eyeScale: 1.3, sclera: 1, mouthCurve: 0, mouthOpen: 0.8, mouthSkew: 0, redness: 0, sweat: 0, tremble: 0 },
   smug: { browTilt: -0.15, browRaise: 0.01, eyeScale: 0.85, sclera: 0, mouthCurve: 0.6, mouthOpen: 0, mouthSkew: 1, redness: 0, sweat: 0, tremble: 0 },
   sad: { browTilt: 0.45, browRaise: 0, eyeScale: 0.95, sclera: 0, mouthCurve: -0.9, mouthOpen: 0, mouthSkew: 0, redness: 0, sweat: 0, tremble: 0 },
+  /** Wincing: squeezed eyes, worried brows, grimace. */
+  pain: { browTilt: 0.6, browRaise: -0.01, eyeScale: 0.45, sclera: 0, mouthCurve: -0.7, mouthOpen: 0.3, mouthSkew: 0.3, redness: 0.1, sweat: 0.6, tremble: 0.3 },
+  /** Knocked out: eyes shut, mouth slack. */
+  dazed: { browTilt: 0.2, browRaise: 0, eyeScale: 0.12, sclera: 0, mouthCurve: -0.2, mouthOpen: 0.35, mouthSkew: 0.6, redness: 0, sweat: 0, tremble: 0 },
 } satisfies Record<string, Face>;
 
 export type Mood = keyof typeof MOODS;

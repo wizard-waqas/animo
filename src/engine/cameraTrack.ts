@@ -4,6 +4,9 @@ import type { FollowPreset, Shot } from "./spec";
 
 export interface CameraState { position: Vec3; lookAt: Vec3; fov: number }
 
+/** Where a car's dashcam is and what it looks at, at time t. */
+export type DashcamResolver = (car: string, t: number) => { position: Vec3; lookAt: Vec3 };
+
 /** How the camera sees an actor: the point to frame and which way it faces. */
 export type FocusResolver = (target: string, t: number) => { point: Vec3; heading: number };
 
@@ -48,12 +51,15 @@ export class CameraTrack {
     private readonly sceneDuration: number,
   ) {}
 
+  /** Set by the compiler so replay shots can sit inside a car's dashcam. */
+  dashcamPose: DashcamResolver | undefined;
+
   addShot(start: number, shot: Shot, blend: number, fov?: number) {
-    const compiled: CompiledShot = { start, blend, fov: fov ?? this.defaultFov, shot };
+    const compiled: CompiledShot = { start, blend, fov: fov ?? (shot.mode === "replay" ? 64 : this.defaultFov), shot };
     if (shot.mode === "move") compiled.from = this.state(start);
     this.shots.push(compiled);
     this.shots.sort((a, b) => a.start - b.start);
-    const length = shot.mode === "move" || shot.mode === "orbit" ? shot.duration : 0;
+    const length = shot.mode === "move" || shot.mode === "orbit" ? shot.duration : shot.mode === "replay" ? shot.to - shot.from : 0;
     return start + Math.max(length, blend);
   }
 
@@ -65,6 +71,24 @@ export class CameraTrack {
   addShake(start: number, intensity: number, duration: number) {
     this.shakes.push({ start, end: start + duration, intensity });
     return start + duration;
+  }
+
+  /** If a dashcam replay is showing at t: which car and what moment of the scene it shows. */
+  replayAt(t: number): { car: string; sourceTime: number; start: number; end: number } | undefined {
+    const index = this.shotIndexAt(t);
+    if (index < 0) return undefined;
+    const { shot, start } = this.shots[index];
+    if (shot.mode !== "replay") return undefined;
+    const length = shot.to - shot.from;
+    if (t > start + length) return undefined;
+    return { car: shot.car, sourceTime: shot.from + (t - start), start, end: start + length };
+  }
+
+  replayWindows() {
+    return this.shots.filter((shot) => shot.shot.mode === "replay").map((shot) => {
+      const replay = shot.shot as Extract<Shot, { mode: "replay" }>;
+      return { start: shot.start, end: shot.start + (replay.to - replay.from), from: replay.from, to: replay.to, car: replay.car };
+    });
   }
 
   hasShotAt(t: number) {
@@ -114,6 +138,11 @@ export class CameraTrack {
           lookAt: point,
           fov,
         };
+      }
+      case "replay": {
+        if (!this.dashcamPose) throw new Error("replay shots need a dashcam resolver");
+        const sourceTime = Math.min(shot.to, shot.from + Math.max(0, t - start));
+        return { ...this.dashcamPose(shot.car, sourceTime), fov };
       }
       case "move": {
         const from = compiled.from!;
@@ -209,7 +238,8 @@ export class CameraTrack {
 
   /** Times of hard cuts (shots with no blend), where a jump in camera position is intended. */
   cutTimes() {
-    return this.shots.filter((shot) => shot.blend === 0).map((shot) => shot.start);
+    const replayEnds = this.replayWindows().map((window) => window.end);
+    return [...this.shots.filter((shot) => shot.blend === 0).map((shot) => shot.start), ...replayEnds];
   }
 
   /** Time windows of camera shakes (intentionally jittery). */

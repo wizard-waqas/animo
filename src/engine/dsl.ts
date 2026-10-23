@@ -85,7 +85,14 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
    * unless `duration` is given. Delivery follows the current mood; [tags] like [whispers] direct it further.
    */
   say: (text: string, opts: { duration?: number } = {}): ActionInput => ({ type: "say", actor: id, text, ...opts }),
-  /** Change facial expression: neutral, happy, angry, scared, shocked, smug, sad. Blends in over 0.25s. */
+  /**
+   * Fire a taser at someone: arm out, wires + crackling electricity, they go rigid and fall flat (and stay
+   * down until their next action — use target.play("get-up")).
+   */
+  tase: (target: ActorRef, opts: { duration?: number } = {}): ActionInput => ({ type: "tase", actor: id, target: idOf(target), ...opts }),
+  /** Lean into a car's open driver door and yank at its dashcam (it rattles on its mount). Stand at the door first. */
+  yankDashcam: (vehicle: ActorRef, opts: { duration?: number } = {}): ActionInput => ({ type: "yank-dashcam", actor: id, car: idOf(vehicle), ...opts }),
+  /** Change facial expression: neutral, happy, angry, scared, shocked, smug, sad, pain, dazed. Blends in over 0.25s. */
   feel: (mood: Mood): ActionInput => ({ type: "feel", actor: id, mood }),
   /** Walks to the door if needed, opens it, sits down, closes it. */
   enter: (vehicle: ActorRef, seat: SeatName = "driver"): ActionInput => ({ type: "enter", actor: id, car: idOf(vehicle), seat }),
@@ -135,6 +142,8 @@ export const car = (id: string, model: CarModel, options: CarOptions) => ({
   crashInto: (target: ActorRef | Vec2, opts: { impactSpeed?: number; brake?: number } = {}): ActionInput =>
     ({ type: "crash", actor: id, into: Array.isArray(target) ? target : idOf(target), ...opts }),
   honk: (opts: { duration?: number; times?: number; word?: boolean } = {}): ActionInput => ({ type: "honk", actor: id, ...opts }),
+  /** Police light bar + siren on/off. siren(true, { sound: false }) = lights flashing, siren quiet. */
+  siren: (on = true, opts: { sound?: boolean } = {}): ActionInput => ({ type: "siren", actor: id, on, ...opts }),
   openDoor: (door: SeatName = "driver"): ActionInput => ({ type: "door", actor: id, door, open: true }),
   closeDoor: (door: SeatName = "driver"): ActionInput => ({ type: "door", actor: id, door, open: false }),
   /** Where a person stands to use this door. */
@@ -166,6 +175,12 @@ export const camera = {
     return { type: "camera", actor: "camera", shot: { mode: "move", position, lookAt: focusOf(lookAt), ...moveOptions }, fov };
   },
   shake: (opts: { intensity?: number; duration?: number } = {}): ActionInput => ({ type: "shake", actor: "camera", ...opts }),
+  /**
+   * Show earlier footage from a car's dashcam: the scene from `from` to `to` (seconds) replays from inside that
+   * car, with a REC overlay and the original audio as if from a small screen. Cut away after (to - from) seconds.
+   */
+  replay: (vehicle: ActorRef, opts: { from: number; to: number }): ActionInput =>
+    ({ type: "camera", actor: "camera", shot: { mode: "replay", car: idOf(vehicle), from: opts.from, to: opts.to } }),
 };
 
 export const caption = (text: string, opts: { duration?: number; position?: "top" | "center" | "bottom"; size?: "title" | "normal" } = {}): ActionInput =>

@@ -21,7 +21,7 @@ export const RIG = {
 export const HAIR_STYLES = ["short", "long", "bun", "ponytail", "spiky", "bald", "curly"] as const;
 export type HairStyle = (typeof HAIR_STYLES)[number];
 
-export const ACCESSORIES = ["cap", "glasses", "tie", "beard", "mustache", "overalls", "bow"] as const;
+export const ACCESSORIES = ["cap", "glasses", "tie", "beard", "mustache", "overalls", "bow", "police-cap", "badge"] as const;
 export type Accessory = (typeof ACCESSORIES)[number];
 
 export interface CharacterLook {
@@ -88,6 +88,18 @@ export const CHARACTERS = {
     skin: "#c68642", hair: "#2b1d14", hairStyle: "short",
     shirt: "#ffffff", pants: "#1d3557", shoes: "#2b2b2b",
     height: 0.96, build: 1.05, accessories: ["cap", "overalls", "beard"], accent: "#1d3557",
+  },
+  officer: {
+    label: "Police officer (uniform, cap, badge)",
+    skin: "#d8a47f", hair: "#2b1d14", hairStyle: "short",
+    shirt: "#1f3a68", pants: "#16213e", shoes: "#111111",
+    height: 0.98, build: 1.08, accessories: ["police-cap", "badge"], accent: "#16213e",
+  },
+  "officer-woman": {
+    label: "Police officer (uniform, cap, badge, bun)",
+    skin: "#a0673f", hair: "#1b1b1b", hairStyle: "bun",
+    shirt: "#1f3a68", pants: "#16213e", shoes: "#111111",
+    height: 0.93, build: 0.97, accessories: ["police-cap", "badge"], accent: "#16213e",
   },
 } satisfies Record<string, CharacterLook>;
 

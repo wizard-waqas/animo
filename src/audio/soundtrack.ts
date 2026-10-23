@@ -116,6 +116,16 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
     const strength = Math.max(0.55, Math.min(1.3, hit.speed / 11));
     play(sounds.crash(rng, strength), hit.time, hit.point, GAINS.crash, "crash", hit.cars.join("+"));
   }
+  for (const zapShot of scene.zaps) {
+    const target = scene.characters[zapShot.target].state(zapShot.start).pos;
+    play(sounds.zap(rng, zapShot.zapEnd - zapShot.start), zapShot.start, [target[0], 1, target[2]], 0.55, "taser", zapShot.target);
+  }
+  for (const [id, car] of Object.entries(scene.cars)) {
+    for (const tug of car.dashcamTugs) {
+      const { pos } = car.kinematics(tug.start);
+      play(sounds.rattle(rng, tug.end - tug.start), tug.start, [pos[0], 1.4, pos[1]], 0.5, "dashcam-rattle", id);
+    }
+  }
   for (const cue of scene.soundCues) {
     play(oneShot(cue.name, rng), cue.time, cue.point, cue.volume * 0.7, cue.name);
   }
@@ -141,6 +151,27 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   }
 
   if (scene.spec.sound.ambience) renderAmbience(scene, bus, rng);
+  // Dashcam replays play the original moment's audio, as if from a small screen (thin, band-limited).
+  for (const window of scene.camera.replayWindows()) {
+    const highpass = [new Lowpass(320), new Lowpass(320)];
+    const lowpass = [new Lowpass(4200), new Lowpass(4200)];
+    const from = Math.round(window.from * SAMPLE_RATE);
+    const start = Math.round(window.start * SAMPLE_RATE);
+    const length = Math.round((window.end - window.start) * SAMPLE_RATE);
+    for (let i = 0; i < length; i++) {
+      const source = from + i;
+      const target = start + i;
+      if (target >= bus.left.length || source >= bus.left.length) break;
+      const fade = Math.min(1, i / 2205, (length - i) / 2205);
+      const channels = [bus.left, bus.right];
+      channels.forEach((channel, c) => {
+        const thin = lowpass[c].process(channel[source]);
+        const filtered = thin - highpass[c].process(thin);
+        channel[target] = channel[target] * (1 - fade) + filtered * 1.25 * fade;
+      });
+    }
+    events.push({ time: window.start, kind: "replay" });
+  }
   bus.master(0.9 * scene.spec.sound.volume);
   events.sort((a, b) => a.time - b.time);
   return { bus, events, screech: screechSpans };
@@ -182,6 +213,8 @@ const renderCar = (
   const engineFilter = new Lowpass(300);
   const tireFilter = new Lowpass(300);
   const squealer = new sounds.Squeal(rng);
+  const siren = new sounds.Siren();
+  let sirenLevel = 0;
   let phase = 0;
   let engineLevel = 0;
   let squealLevel = 0;
@@ -225,7 +258,9 @@ const renderCar = (
       squealStart = undefined;
     }
 
-    const value = (engine * GAINS.engine + tires * GAINS.tires + squeal * GAINS.screech) * mix.gain;
+    sirenLevel += ((car.sirenSoundOn(t) ? 1 : 0) - sirenLevel) * 0.0004;
+    const wail = sirenLevel > 0.001 ? siren.next(t) * sirenLevel : 0;
+    const value = (engine * GAINS.engine + tires * GAINS.tires + squeal * GAINS.screech + wail * 0.28) * mix.gain;
     const [left, right] = panGains(mix.pan);
     bus.addAt(i, value * left, value * right);
   }

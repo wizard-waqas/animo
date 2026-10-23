@@ -5,9 +5,10 @@ import type { PropSpec, SetName } from "../engine/spec";
  * - The road runs along X, centered on z = 0. Lanes: z = +1.8 (traffic heading +X), z = -1.8 (heading -X).
  * - Sidewalks: suburb |z| 3.6–6.1, city |z| 3.6–8.6. Parking lot asphalt: x -35..35, z -28..16.
  * - Suburb houses at z = -16 (x = 0, ±16, ±32, ±48) with driveways at z -6..-13 in front of x = 0, ±16, ±32.
- * - Highway: eastbound (+X) lanes at z = 1.8 (fast/left) and z = 5.4 (right), shoulder z 7.2–9.4, guardrail z = 10.
- *   Concrete median barrier at z = -0.6. Westbound lanes z = -3, -6.6. Trees only behind (z < -14), so cameras
- *   can sit anywhere on the near side (z > 10) or on the median side (z ≈ -2…-9, the westbound lanes are empty).
+ * - Highway: a forest highway. Eastbound (+X) lanes at z = 1.8 (fast/left) and z = 5.4 (right). Shoulders
+ *   z -1.0…0 (left) and 7.2…9.4 (right). Guardrails at z = -1.3 and z = 10. Tall pines (7–10m) from z -3 to -12
+ *   and from z 12 to 21 the whole way; the westbound road is hidden behind the left trees (z ≈ -19).
+ *   Cameras must stay in the corridor (z -1…11) or go above the treetops (y > 11).
  * - The front of every set (z > 6) is kept clear so cameras can sit there.
  */
 
@@ -18,6 +19,30 @@ const building = (x: number, z: number, scale: number, color: string): PropSpec 
 const HOUSE_COLORS = ["#f6bd60", "#84a59d", "#f28482", "#a2d2ff", "#cdb4db", "#ffd6a5"];
 
 /** Built-in sets. The front of each set (z > 5) is kept clear so cameras can sit there. */
+/** Rows of tall pines on both sides of the highway, deterministic "random" spacing so it looks natural. */
+function forestHighway(): PropSpec[] {
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const rows = [-3.4, -6.4, -9.6, -12.4, 12.8, 15.8, 19, 22];
+  const trees: PropSpec[] = [];
+  for (const z of rows) {
+    for (let x = -260 + random() * 4; x < 330; x += 5.5 + random() * 3.5) {
+      const isPine = random() < 0.8;
+      trees.push({
+        type: isPine ? "pine" : "tree",
+        at: [x, z + (random() - 0.5) * 1.6],
+        facing: random() * 360,
+        scale: isPine ? 1.9 + random() * 0.8 : 1.5 + random() * 0.5,
+        color: isPine ? ["#2e7d4f", "#2a6f47", "#33865a", "#276b43"][Math.floor(random() * 4)] : undefined,
+      });
+    }
+  }
+  return trees;
+}
+
 export const SET_PROPS: Record<SetName, PropSpec[]> = {
   suburb: [
     ...[-48, -32, -16, 0, 16, 32, 48].map((x, i) => house(x, HOUSE_COLORS[i % HOUSE_COLORS.length])),
@@ -38,13 +63,7 @@ export const SET_PROPS: Record<SetName, PropSpec[]> = {
     ...[-30, -10, 10, 30].map((x): PropSpec => ({ type: "lamp", at: [x, -7], facing: 0, scale: 1 })),
     ...[-42, 42].flatMap((x) => [tree(x, -20), tree(x, -2), tree(x, 12, "pine")]),
   ],
-  highway: [
-    ...Array.from({ length: 21 }, (_, i) => -240 + i * 24).flatMap((x, i) => [
-      tree(x, -16 - (i % 3) * 2, i % 2 === 0 ? "pine" : "tree"),
-      tree(x + 12, -22 - (i % 2) * 3, i % 3 === 0 ? "tree" : "pine"),
-    ]),
-    ...Array.from({ length: 13 }, (_, i) => -240 + i * 40).map((x): PropSpec => ({ type: "lamp", at: [x, -1.2], facing: 0, scale: 1 })),
-  ],
+  highway: forestHighway(),
   empty: [],
 };
 
