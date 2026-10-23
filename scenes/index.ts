@@ -5,6 +5,7 @@ import midnightDonuts from "./midnight-donuts.scene";
 import missedTaxi from "./missed-taxi.scene";
 import ninePlusTen from "./nine-plus-ten.scene";
 import pickupFriend from "./pickup-friend.scene";
+import yellowZone from "./yellow-zone.scene";
 
 /** Every scene that shows up in Remotion Studio and the CLI. Add new scenes here. */
-export const scenes: SceneSpec[] = [pickupFriend, installDay, midnightDonuts, missedTaxi, brakeCheck, ninePlusTen];
+export const scenes: SceneSpec[] = [pickupFriend, installDay, midnightDonuts, missedTaxi, brakeCheck, ninePlusTen, yellowZone];

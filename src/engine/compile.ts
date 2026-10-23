@@ -191,6 +191,9 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     const currentSpeed = striker.speedAt(start);
     const startSpeed = currentSpeed < 0.5 ? 0 : currentSpeed;
     const halfLength = striker.shape.length / 2;
+    // Backing into something: it travels tail-first, so it keeps facing away from the hit.
+    const reversing = startSpeed > 0 && now.reverse;
+    const facingFor = (travel: Vec2) => headingOf(travel) + (reversing ? Math.PI : 0);
 
     let direction: Vec2;
     let impactTime: number;
@@ -199,7 +202,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     if (victim) {
       // Moving or parked victim: simulate forward until the bumpers touch.
       const parkedTarget = victim.kinematics(start).pos;
-      direction = startSpeed > 0 ? rotate2([0, 1], now.heading) : scale2(sub2(parkedTarget, now.pos), 1 / Math.max(length2(sub2(parkedTarget, now.pos)), 1e-6));
+      direction = startSpeed > 0 ? rotate2([0, reversing ? -1 : 1], now.heading) : scale2(sub2(parkedTarget, now.pos), 1 / Math.max(length2(sub2(parkedTarget, now.pos)), 1e-6));
       const acceleration = startSpeed > 0 ? -(options.brake ?? 0) : 5;
       const step = 1 / 240;
       let hit: number | undefined;
@@ -226,7 +229,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
       impactTime = start + hit;
       const strikerSpeed = startSpeed + acceleration * hit;
       stopPoint = add2(now.pos, scale2(direction, startSpeed * hit + 0.5 * acceleration * hit * hit));
-      striker.addDrive(start, { to: stopPoint, arriveHeading: headingOf(direction), fromSpeed: startSpeed, endSpeed: strikerSpeed, easeName: "linear", reverse: false });
+      striker.addDrive(start, { to: stopPoint, arriveHeading: facingFor(direction), fromSpeed: startSpeed, endSpeed: strikerSpeed, easeName: "linear", reverse: reversing });
       const victimSpeed = victim.speedAt(impactTime);
       impactSpeed = Math.max(1, strikerSpeed - victimSpeed);
     } else {
@@ -236,7 +239,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
       stopPoint = sub2(point, scale2(direction, halfLength + 0.06));
       impactSpeed = options.impactSpeed ?? (startSpeed > 1 ? startSpeed : 12);
       impactTime = striker.addDrive(start, {
-        to: stopPoint, arriveHeading: headingOf(direction), fromSpeed: startSpeed, endSpeed: impactSpeed, easeName: "linear", reverse: false,
+        to: stopPoint, arriveHeading: facingFor(direction), fromSpeed: startSpeed, endSpeed: impactSpeed, easeName: "linear", reverse: reversing,
       });
     }
 

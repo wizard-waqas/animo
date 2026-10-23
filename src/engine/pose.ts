@@ -149,6 +149,9 @@ export const LYING_POSE: Pose = withPose({
   lShoulderX: 0.2, rShoulderX: -0.1, lShoulderZ: 0.9, rShoulderZ: 1.1, lElbow: 0.4, rElbow: 0.2,
 });
 
+/** Seconds per punch in the "punch" clip (the soundtrack lands a smack on each one). */
+export const PUNCH_BEAT = 0.4;
+
 export const CLIPS = {
   wave: {
     layer: "gesture", defaultDuration: 2, description: "Right arm up, waving side to side",
@@ -263,6 +266,22 @@ export const CLIPS = {
     layer: "gesture", defaultDuration: 2, description: "Hands raised in surrender (or 'whoa, calm down')",
     pose: () => withPose({ lShoulderZ: 1.9, rShoulderZ: 1.9, lElbow: 1.5, rElbow: 1.5, lShoulderX: 0.3, rShoulderX: 0.3, spineX: -0.08 }),
   },
+  punch: {
+    layer: "gesture", defaultDuration: 1.6, description: "Fists up, throwing alternating punches (one every 0.4s)",
+    pose: (t) => {
+      const beat = t % PUNCH_BEAT;
+      const right = Math.floor(t / PUNCH_BEAT) % 2 === 0;
+      // Snap out fast, pull back slower.
+      const reach = beat < PUNCH_BEAT * 0.4 ? Math.sin((Math.PI / 2) * (beat / (PUNCH_BEAT * 0.4))) : 1 - (beat - PUNCH_BEAT * 0.4) / (PUNCH_BEAT * 0.6);
+      const r = right ? reach : 0;
+      const l = right ? 0 : reach;
+      return withPose({
+        spineX: 0.12 + 0.08 * reach, spineY: 0.25 * (l - r), headX: -0.05,
+        rShoulderX: 1.05 + 0.5 * r, rShoulderZ: 0.12, rElbow: 2.1 - 2.0 * r,
+        lShoulderX: 1.05 + 0.5 * l, lShoulderZ: 0.12, lElbow: 2.1 - 2.0 * l,
+      });
+    },
+  },
   stagger: {
     layer: "body", defaultDuration: 1.2, description: "Knocked back: lurches backwards, arms flailing, recovers",
     pose: (t, d) => {
@@ -300,6 +319,20 @@ export const CLIPS = {
       // A couple of twitches once down.
       const twitch = t > rigidEnd + d * 0.3 ? 0.06 * Math.max(0, wave(t, 7)) * Math.exp(-(t - rigidEnd) * 2) : 0;
       return { ...toppled, lShoulderZ: toppled.lShoulderZ + twitch, headZ: toppled.headZ + twitch };
+    },
+  },
+  "knocked-out": {
+    layer: "body", defaultDuration: 1.4, holds: true,
+    description: "Takes a hit, reels back and drops flat on the back, out cold (stays down)",
+    pose: (t, d) => {
+      const reel = Math.sin((Math.PI / 2) * clamp01(t / (d * 0.3)));
+      const stunned = withPose({
+        spineX: -0.35 * reel, headX: -0.4 * reel, lShoulderZ: 0.3 + 1.2 * reel, rShoulderZ: 0.3 + 1.4 * reel,
+        lElbow: 0.5, rElbow: 0.4, lKnee: 0.3 * reel, rKnee: 0.15 * reel,
+      });
+      if (t < d * 0.3) return stunned;
+      const fall = clamp01((t - d * 0.3) / (d * 0.45));
+      return blendPose(stunned, LYING_POSE, fall * fall);
     },
   },
   "get-up": {

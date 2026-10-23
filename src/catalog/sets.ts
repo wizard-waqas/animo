@@ -9,12 +9,40 @@ import type { PropSpec, SetName } from "../engine/spec";
  *   z -1.0…0 (left) and 7.2…9.4 (right). Guardrails at z = -1.3 and z = 10. Tall pines (7–10m) from z -3 to -12
  *   and from z 12 to 21 the whole way; the westbound road is hidden behind the left trees (z ≈ -19).
  *   Cameras must stay in the corridor (z -1…11) or go above the treetops (y > 11).
- * - The front of every set (z > 6) is kept clear so cameras can sit there.
+ * - The front of every set (z > 6) is kept clear so cameras can sit there (except narrow-street).
+ * - Narrow street: asphalt z -5..5, one travel lane z -3..3 between yellow "EMERGENCY VEHICLES ONLY" strips
+ *   (z 3..5 and -5..-3, painted curbs) that people park on anyway (park at z = ±4). Sidewalks |z| 5–7.
+ *   Houses on both sides, fronts at |z| = 11, each with a 2-car driveway (5.6m wide, |z| 5–11) and a garage.
+ *   North lots (z < 0) at x = 0, ±16, ±32: house x − 2.5, driveway/garage x + 3.5, door at [x − 2.5, −11].
+ *   South lots (z > 0) at x = ±8, ±24, 40: same offsets, door at [x − 2.5, 11].
+ *   Cameras: the street, the front yards (|z| 7…10) or above the roofs (y > 7).
  */
 
 const house = (x: number, color: string): PropSpec => ({ type: "house", at: [x, -16], facing: 0, scale: 1, color });
 const tree = (x: number, z: number, type: "tree" | "pine" | "bush" = "tree"): PropSpec => ({ type, at: [x, z], facing: 0, scale: 1 });
 const building = (x: number, z: number, scale: number, color: string): PropSpec => ({ type: "building", at: [x, z], facing: 0, scale, color });
+
+/** Narrow street lot centers (see the header). Driveways are at lot + 3.5. */
+export const NARROW_NORTH_LOTS = [-32, -16, 0, 16, 32];
+export const NARROW_SOUTH_LOTS = [-24, -8, 8, 24, 40];
+
+function narrowStreet(): PropSpec[] {
+  const props: PropSpec[] = [];
+  const lots = [...NARROW_NORTH_LOTS.map((x) => [x, -1] as const), ...NARROW_SOUTH_LOTS.map((x) => [x, 1] as const)];
+  lots.forEach(([x, side], i) => {
+    const facing = side < 0 ? 0 : 180;
+    props.push({ type: "house", at: [x - 2.5, side * 14], facing, scale: 1, color: HOUSE_COLORS[(i * 5) % HOUSE_COLORS.length] });
+    props.push({ type: "garage", at: [x + 3.5, side * 14.3], facing, scale: 1.3, color: "#f1ece2" });
+    props.push({ type: "bush", at: [x - 5.4, side * 10.3], facing: 0, scale: 0.8 });
+    props.push({ type: "mailbox", at: [x - 0.4, side * 7.3], facing, scale: 1 });
+  });
+  // Street trees in the yards between lots, and a few lamps.
+  for (const x of [-40, -24, -8, 8, 24, 40]) props.push(tree(x - 0.5, -9.2, x % 16 === 0 ? "pine" : "tree"));
+  for (const x of [-32, -16, 0, 16, 32]) props.push(tree(x - 0.5, 9.2));
+  for (const x of [-36, 12]) props.push({ type: "lamp", at: [x, -7.4], facing: 0, scale: 1 });
+  for (const x of [-12, 36]) props.push({ type: "lamp", at: [x, 7.4], facing: 180, scale: 1 });
+  return props;
+}
 
 const HOUSE_COLORS = ["#f6bd60", "#84a59d", "#f28482", "#a2d2ff", "#cdb4db", "#ffd6a5"];
 
@@ -51,6 +79,7 @@ export const SET_PROPS: Record<SetName, PropSpec[]> = {
     ...[-36, -4, 28].map((x): PropSpec => ({ type: "mailbox", at: [x, -5.4], facing: 0, scale: 1 })),
     ...[-60, -20, 20, 60].map((x): PropSpec => ({ type: "lamp", at: [x, 5.6], facing: 180, scale: 1 })),
   ],
+  "narrow-street": narrowStreet(),
   city: [
     ...[-45, -34, -23, -12, -1, 10, 21, 32, 43].map((x, i) => building(x, -14, 1 + (i % 3) * 0.45, ["#8ecae6", "#ffb703", "#e5989b", "#b5e48c", "#cdb4db"][i % 5])),
     ...[-40, -24, -8, 8, 24, 40].map((x): PropSpec => ({ type: "lamp", at: [x, -5], facing: 0, scale: 1 })),

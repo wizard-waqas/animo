@@ -27,7 +27,7 @@ export const anchorSchema = z.object({
 export const targetSchema = z.union([vec2Schema, anchorSchema]);
 
 export const STYLES = ["sunny", "sunset", "night", "overcast"] as const;
-export const SETS = ["suburb", "city", "highway", "parking-lot", "empty"] as const;
+export const SETS = ["suburb", "narrow-street", "city", "highway", "parking-lot", "empty"] as const;
 export const FORMATS = ["vertical", "landscape", "square"] as const;
 export const PROP_TYPES = ["tree", "pine", "bush", "house", "building", "cone", "lamp", "bench", "mailbox", "garage"] as const;
 export const SOUND_NAMES = ["crash", "honk", "boing", "thud", "whoosh", "door-slam", "pop", "screech"] as const;

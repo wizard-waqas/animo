@@ -1,12 +1,12 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Vec3 } from "../engine/math";
-import { SET_PROPS } from "../catalog/sets";
+import { NARROW_NORTH_LOTS, NARROW_SOUTH_LOTS, SET_PROPS } from "../catalog/sets";
 import type { PropSpec, SetName } from "../engine/spec";
 import { Forest } from "./Forest";
 import { Prop } from "./Props";
 import type { StylePreset } from "./styles";
-import { Part, shapes } from "./toon";
+import { Part, shapes, toonGradient } from "./toon";
 
 /** Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action. */
 export const World = ({ style, set, props, focus, debug }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean }) => {
@@ -108,6 +108,7 @@ const Ground = ({ style, set }: { style: StylePreset; set: SetName }) => (
   <>
     <Part geometry={shapes.plane(800, 800)} color={style.grass} outline={false} />
     {(set === "suburb" || set === "city") && <Street style={style} wide={set === "city"} />}
+    {set === "narrow-street" && <NarrowStreet style={style} />}
     {set === "highway" && <Highway style={style} />}
     {set === "parking-lot" && <ParkingLot style={style} />}
   </>
@@ -152,6 +153,63 @@ const LongBox = ({ length, size, radius, color, position }: { length: number; si
     </>
   );
 };
+
+const CURB_YELLOW = "#ffc300";
+const STENCIL_SPACING = 9;
+const STENCILS = Array.from({ length: 22 }, (_, i) => -99 + i * STENCIL_SPACING);
+
+/** "EMERGENCY VEHICLES ONLY" painted in yellow, drawn once to a canvas. Reads upright from the +Z side. */
+let stencilTexture: THREE.CanvasTexture | undefined;
+const emergencyStencil = () => {
+  if (stencilTexture) return stencilTexture;
+  const canvas = document.createElement("canvas");
+  canvas.width = 2048;
+  canvas.height = 256;
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = CURB_YELLOW;
+  context.font = "bold 150px 'DejaVu Sans', Arial, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("EMERGENCY VEHICLES ONLY", 1024, 132, 1960);
+  stencilTexture = new THREE.CanvasTexture(canvas);
+  stencilTexture.colorSpace = THREE.SRGBColorSpace;
+  stencilTexture.anisotropy = 8;
+  return stencilTexture;
+};
+
+const Stencil = ({ position }: { position: [number, number, number] }) => {
+  const material = useMemo(
+    () => new THREE.MeshToonMaterial({ map: emergencyStencil(), gradientMap: toonGradient, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    [],
+  );
+  return <mesh geometry={shapes.plane(7.6, 0.95)} material={material} position={position} receiveShadow />;
+};
+
+/**
+ * Narrow residential street along X: asphalt z -5..5, one lane between two yellow no-parking strips
+ * (z ±3..±5, yellow curbs, "EMERGENCY VEHICLES ONLY" stencils), 2m sidewalks, and a 2-car driveway per lot.
+ */
+const NarrowStreet = ({ style }: { style: StylePreset }) => (
+  <>
+    <Part geometry={shapes.plane(400, 10)} color={style.asphalt} position={[0, 0.03, 0]} outline={false} />
+    {[1, -1].map((side) => (
+      <group key={side}>
+        <LongBox length={400} size={[0.16, 0.012]} radius={0.004} color={CURB_YELLOW} position={[0, 0.04, side * 3.0]} />
+        <Part geometry={shapes.plane(400, 2)} color={style.sidewalk} position={[0, 0.045, side * 6.1]} outline={false} />
+        <LongBox length={400} size={[0.14, 0.2]} radius={0.02} color={CURB_YELLOW} position={[0, 0.06, side * 5.05]} />
+        {STENCILS.map((x) => (
+          <Stencil key={x} position={[x + (side > 0 ? STENCIL_SPACING / 2 : 0), 0.05, side * 4.0]} />
+        ))}
+      </group>
+    ))}
+    {[...NARROW_NORTH_LOTS.map((x) => [x, -1]), ...NARROW_SOUTH_LOTS.map((x) => [x, 1])].map(([x, side]) => (
+      <group key={`${x}|${side}`}>
+        <Part geometry={shapes.plane(5.6, 5.9)} color="#d6d0c4" position={[x + 3.5, 0.05, side * 8.0]} outline={false} />
+        <Part geometry={shapes.plane(1.1, 3.9)} color={style.sidewalk} position={[x - 2.5, 0.048, side * 9.05]} outline={false} />
+      </group>
+    ))}
+  </>
+);
 
 const HIGHWAY_DASHES = Array.from({ length: 160 }, (_, i) => -400 + i * 5);
 const GUARDRAIL_POSTS = Array.from({ length: 160 }, (_, i) => -400 + i * 5);

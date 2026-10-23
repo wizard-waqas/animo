@@ -1,6 +1,6 @@
 import type { CompiledScene } from "../engine/compile";
 import type { Vec3 } from "../engine/math";
-import { STRIDE } from "../engine/pose";
+import { PUNCH_BEAT, STRIDE } from "../engine/pose";
 import type { SoundName } from "../engine/spec";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -76,12 +76,20 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
       const at = (fraction: number) => segment.start + length * fraction;
       const where = track.state(segment.start).pos;
       if (segment.clip === "jump") play(sounds.thud(rng, look.height), at(0.75), where, GAINS.clip, "jump-land", id);
+      if (segment.clip === "knocked-out") play(sounds.thud(rng, look.height * 1.5), at(0.72), where, GAINS.clip * 1.3, "fall", id);
       if (segment.clip === "fall-over") play(sounds.thud(rng, look.height * 1.3), at(0.5), where, GAINS.clip * 1.2, "fall", id);
       if (segment.clip === "dance") for (let beat = segment.start; beat < segment.end; beat += 1 / 1.1) play(sounds.footstep(rng, look.height, false), beat, where, GAINS.footstep, "footstep", id);
     }
     for (const gesture of track.gestures) {
-      if (gesture.clip !== "clap") continue;
       const where = track.state(gesture.start).pos;
+      if (gesture.clip === "punch") {
+        // Each punch reaches full extension 40% into its beat.
+        for (let time = gesture.start + PUNCH_BEAT * 0.4; time < gesture.end; time += PUNCH_BEAT) {
+          play(sounds.smack(rng), time, [where[0], 1.4, where[2]], GAINS.clip * 1.4, "punch", id);
+        }
+        continue;
+      }
+      if (gesture.clip !== "clap") continue;
       // The clap pose closes the hands at t = (0.75 + k) / 3 seconds.
       for (let k = 0; ; k++) {
         const time = gesture.start + (0.75 + k) / 3;
@@ -280,10 +288,10 @@ const renderAmbience = (scene: CompiledScene, bus: StereoBus, rng: Rng) => {
     bus.addAt(i, windLeft.process(rng.noise()) * windLevel * swell, windRight.process(rng.noise()) * windLevel * swell);
   }
   const duration = scene.spec.duration;
-  if (!night && (set === "suburb" || set === "highway" || set === "parking-lot")) {
+  if (!night && (set === "suburb" || set === "narrow-street" || set === "highway" || set === "parking-lot")) {
     for (let t = rng.range(0.2, 1.2); t < duration; t += rng.range(0.7, 2.6)) {
       const chirp = birdChirp(rng);
-      bus.place(chirp, t, set === "suburb" ? 0.09 : 0.04, rng.range(-0.9, 0.9));
+      bus.place(chirp, t, set === "suburb" || set === "narrow-street" ? 0.09 : 0.04, rng.range(-0.9, 0.9));
     }
   }
   if (night) {
