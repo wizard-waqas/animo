@@ -76,7 +76,8 @@ locally.
    ```bash
    npm run render -- pickup-friend --preview
    ```
-   The first render downloads a headless Chrome (about 170MB) automatically. The video lands in
+   On a Mac with Google Chrome installed, it renders with that. Otherwise the first render downloads a headless
+   Chrome (about 170MB) automatically. The video lands in
    `out/pickup-friend/preview.mp4`.
 
 To preview in the browser instead and scrub through clips, run `npm run studio`.
@@ -93,9 +94,23 @@ npm run render -- <scene> --from 20 --to 35  # just a slice (seconds or a cue na
 Render prints frames done, speed and time left every few seconds. Each render first records any new voice
 lines, then builds the soundtrack.
 
-**If the render crashes** with "browser has disconnected", Animo automatically retries with software graphics
-(slower). To use your own Chrome instead, set `TOON_BROWSER=/path/to/chrome`. To pick the graphics mode
-yourself, set `TOON_GL=angle` or `TOON_GL=swangle`.
+**On a Mac, Animo renders with your installed Google Chrome** (`/Applications/Google Chrome.app`) when it's
+there. Remotion's own downloaded Chrome crashes with "browser has disconnected" on Apple Silicon. No Chrome
+installed? Install it, or point `TOON_BROWSER` at another Chrome/Chromium (in `.env.local` or before the command).
+If the browser still crashes, Animo retries once with software graphics (works, but slower). To pick the graphics
+mode yourself, set `TOON_GL=angle` (GPU) or `TOON_GL=swangle` (software).
+
+**Long clips: render one part at a time.** `--from` and `--to` take seconds or a cue name (the names in
+`.as("...")` in the scene file; `npm run inspect -- <scene>` lists them as `#name`). A cue name keeps the cut in
+the right place even after voice recordings change the timing. For `brake-check` (58s), split where the police
+pull up:
+
+```bash
+npm run render -- brake-check --to police-stop     # part 1: brake check, crash, argument, dashcam grab
+npm run render -- brake-check --from police-stop   # part 2: police, taser, dashcam replay, arrest
+```
+
+Each part is saved under its time range, e.g. `out/brake-check/brake-check-0.0-31.8s.mp4`.
 
 **Voice errors** are explained in plain words (bad key, out of credits, unknown voice, can't connect), and the
 video still renders, just without the lines that failed.
