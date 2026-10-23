@@ -8,8 +8,11 @@ import { Prop } from "./Props";
 import type { StylePreset } from "./styles";
 import { Part, shapes } from "./toon";
 
-/** Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action. */
-export const World = ({ style, set, props, focus, debug }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean }) => {
+/**
+ * Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action.
+ * `shadowMap` is the shadow texture size (0 = no shadow pass; on software WebGL that pass costs more than the frame).
+ */
+export const World = ({ style, set, props, focus, debug, shadowMap = 2048 }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean; shadowMap?: number }) => {
   const setProps = useMemo(() => [...SET_PROPS[set], ...props], [set, props]);
   return (
     <>
@@ -17,7 +20,7 @@ export const World = ({ style, set, props, focus, debug }: { style: StylePreset;
       <Sky style={style} />
       {style.clouds && <Clouds />}
       <hemisphereLight args={[style.ambientSky, style.ambientGround, style.ambientIntensity]} />
-      <Sun style={style} focus={focus} />
+      <Sun style={style} focus={focus} shadowMap={shadowMap} />
       <Ground style={style} set={set} />
       {/* Trees are instanced (cheap even by the hundred); everything else is a regular prop. */}
       <Forest trees={setProps.filter((prop) => prop.type === "tree" || prop.type === "pine")} />
@@ -75,7 +78,7 @@ const Clouds = () => (
   </>
 );
 
-const Sun = ({ style, focus }: { style: StylePreset; focus: Vec3 }) => {
+const Sun = ({ style, focus, shadowMap }: { style: StylePreset; focus: Vec3; shadowMap: number }) => {
   const light = useRef<THREE.DirectionalLight>(null);
   useLayoutEffect(() => {
     const sun = light.current;
@@ -90,8 +93,8 @@ const Sun = ({ style, focus }: { style: StylePreset; focus: Vec3 }) => {
       ref={light}
       color={style.sunColor}
       intensity={style.sunIntensity}
-      castShadow
-      shadow-mapSize={[2048, 2048]}
+      castShadow={shadowMap > 0}
+      shadow-mapSize={[shadowMap || 1, shadowMap || 1]}
       shadow-camera-left={-28}
       shadow-camera-right={28}
       shadow-camera-top={28}

@@ -82,13 +82,14 @@ const InstancedPart = ({ part, trees }: { part: TreePart; trees: PropSpec[] }) =
       if (!target) continue;
       target.instanceMatrix.needsUpdate = true;
       if (target.instanceColor) target.instanceColor.needsUpdate = true;
+      // Bounds over every instance, so three.js can skip the whole row when the camera looks away.
       target.computeBoundingSphere();
     }
   }, [trees, part]);
   return (
     <>
-      <instancedMesh ref={mesh} args={[part.geometry, material, trees.length]} castShadow receiveShadow frustumCulled={false} />
-      <instancedMesh ref={outline} args={[part.geometry, instancedOutline, trees.length]} frustumCulled={false} />
+      <instancedMesh ref={mesh} args={[part.geometry, material, trees.length]} castShadow receiveShadow />
+      <instancedMesh ref={outline} args={[part.geometry, instancedOutline, trees.length]} />
     </>
   );
 };

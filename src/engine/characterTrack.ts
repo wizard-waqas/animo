@@ -2,7 +2,7 @@ import type { SeatName } from "../catalog/cars";
 import { type CharacterLook, RIG } from "../catalog/characters";
 import type { CarTrack } from "./carTrack";
 import { type Face, type Mood, faceAt } from "./expression";
-import type { VoiceClip } from "../../voices/manifest";
+import type { VoiceClip } from "../voice/lines";
 import { envelopeAt, estimateSpeechDuration, findVoiceClip, lineKey, stripTags } from "../voice/lines";
 import { type Vec2, type Vec3, DEG, angleDelta, clamp01, distance2, headingOf, lerp, lerpAngle, progress, sub2 } from "./math";
 import { type Path, smoothPath } from "./path";

@@ -11,6 +11,7 @@
     "stills": "tsx scripts/stills.ts",
     "sound": "tsx scripts/sound.ts",
     "voices": "tsx scripts/voices.ts",
+    "preflight": "tsx scripts/preflight.ts",
     "render": "tsx scripts/render.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
