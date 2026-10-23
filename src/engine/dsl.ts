@@ -6,7 +6,7 @@ import { arcPoints } from "./path";
 import type { Mood } from "./expression";
 import type { ClipName } from "./pose";
 import {
-  type ActionInput, type Anchor, type FollowPreset, type PropSpec, type SceneInput, type SceneSpec, type Target,
+  type ActionInput, type Anchor, type FollowPreset, type PropSpec, type SceneInput, type SceneSpec, type SetName, type Target,
   type SoundName, type TimelineEntryInput, SPOTS, parseScene,
 } from "./spec";
 
@@ -61,6 +61,8 @@ interface CharacterOptions {
   seatedIn?: { car: ActorRef; seat: SeatName };
   /** Voice for spoken lines (ElevenLabs voice id / Google voice name). Defaults per character model. */
   voice?: string;
+  /** Only on screen while this set is showing (clips that cut between locations — see cutTo). */
+  set?: SetName;
 }
 
 export const character = (id: string, model: CharacterModel, options: CharacterOptions) => ({
@@ -73,6 +75,7 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
     colors: options.colors,
     seatedIn: options.seatedIn && { car: idOf(options.seatedIn.car), seat: options.seatedIn.seat },
     voice: options.voice,
+    set: options.set,
   },
   walkTo: (target: Target, opts: { speed?: number; facing?: number } = {}): ActionInput => ({ type: "walk", actor: id, target, run: false, ...opts }),
   runTo: (target: Target, opts: { speed?: number; facing?: number } = {}): ActionInput => ({ type: "walk", actor: id, target, run: true, ...opts }),
@@ -97,6 +100,8 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
   /** Walks to the door if needed, opens it, sits down, closes it. */
   enter: (vehicle: ActorRef, seat: SeatName = "driver"): ActionInput => ({ type: "enter", actor: id, car: idOf(vehicle), seat }),
   exit: (): ActionInput => ({ type: "exit", actor: id }),
+  /** Teleport to a spot (facing in degrees). Only use it on a camera/location cut — e.g. the next scene at home. */
+  place: (at: Vec2, facing?: number): ActionInput => ({ type: "place", actor: id, at, facing }),
   /** A point next to this character, e.g. somebody.walkTo(mike.spot("front", 1.2)). */
   spot: (spot: Spot, distance?: number): Anchor => ({ actor: id, anchor: spot, distance }),
 });
@@ -110,6 +115,12 @@ interface CarOptions {
   label?: string;
   /** Dashcam on the windshield. */
   dashcam?: boolean;
+  /** Text across the back, e.g. a phone number on a truck's tailgate. */
+  rearLabel?: string;
+  /** Starts covered in mud. */
+  muddy?: boolean;
+  /** Only on screen while this set is showing (see cutTo). */
+  set?: SetName;
 }
 
 interface DriveOptions {
@@ -129,11 +140,21 @@ interface DriveOptions {
 
 export const car = (id: string, model: CarModel, options: CarOptions) => ({
   id,
-  spec: { kind: "car" as const, model, at: options.at, facing: options.facing, color: options.color, label: options.label, dashcam: options.dashcam },
+  spec: {
+    kind: "car" as const, model, at: options.at, facing: options.facing, color: options.color, label: options.label, dashcam: options.dashcam,
+    rearLabel: options.rearLabel, muddy: options.muddy, set: options.set,
+  },
   driveTo: (to: Target, opts: DriveOptions = {}): ActionInput => ({ type: "drive", actor: id, to, ...opts }),
   /** Drive a smooth curve through every point (current position is the implicit start). */
   driveThrough: (points: Vec2[], opts: Omit<DriveOptions, "facing"> = {}): ActionInput => ({ type: "drive", actor: id, through: points, ...opts }),
-  hop: (opts: { height?: number; duration?: number } = {}): ActionInput => ({ type: "hop", actor: id, ...opts }),
+  /** Bounce into the air. sound "thud" for a heavy vehicle going over a bump (default "boing"). */
+  hop: (opts: { height?: number; duration?: number; sound?: "boing" | "thud" } = {}): ActionInput => ({ type: "hop", actor: id, ...opts }),
+  /**
+   * Mud flies off the back (a loaded dirt truck) and splatters all over another car: clumps arc through the air
+   * and land on its windshield, hood, bumper and roof (they follow the target if it's moving), "SPLAT!", splat sounds.
+   * The mud stays on that car. Clumps start flying at the action's start; it ends when the last one lands.
+   */
+  mudOnto: (target: ActorRef, opts: { amount?: number } = {}): ActionInput => ({ type: "mud", actor: id, onto: idOf(target), ...opts }),
   /**
    * Drive into another car (or a point) and crash: stops on contact, bounces back, shoves the other car,
    * impact burst + debris + smoke + "CRASH!", camera shake and crash sound. Starts from the current speed;
@@ -179,8 +200,8 @@ export const camera = {
    * Show earlier footage from a car's dashcam: the scene from `from` to `to` (seconds) replays from inside that
    * car, with a REC overlay and the original audio as if from a small screen. Cut away after (to - from) seconds.
    */
-  replay: (vehicle: ActorRef, opts: { from: number; to: number }): ActionInput =>
-    ({ type: "camera", actor: "camera", shot: { mode: "replay", car: idOf(vehicle), from: opts.from, to: opts.to } }),
+  replay: (vehicle: ActorRef, opts: { from: number; to: number; fov?: number }): ActionInput =>
+    ({ type: "camera", actor: "camera", shot: { mode: "replay", car: idOf(vehicle), from: opts.from, to: opts.to }, fov: opts.fov }),
 };
 
 export const caption = (text: string, opts: { duration?: number; position?: "top" | "center" | "bottom"; size?: "title" | "normal" } = {}): ActionInput =>
@@ -189,7 +210,17 @@ export const caption = (text: string, opts: { duration?: number; position?: "top
 /** One-off sound effect, optionally placed in the world (for volume/panning). */
 export const sound = (name: SoundName, opts: { at?: Vec3; volume?: number } = {}): ActionInput => ({ type: "sound", actor: "sound", name, ...opts });
 
-export const prop = (type: PropSpec["type"], at: Vec2, opts: { facing?: number; scale?: number; color?: string } = {}) => ({ type, at, ...opts });
+/**
+ * Extra set dressing. `y` lifts it (a mug on a table), `set` limits it to one location, `from` makes it appear at a
+ * time or when a cue ends: prop("mug", [1, 2], { y: 0.72, from: { cue: "set-down", delay: -0.6 } }).
+ */
+export const prop = (
+  type: PropSpec["type"], at: Vec2,
+  opts: { facing?: number; scale?: number; color?: string; y?: number; set?: SetName; from?: number | { cue: string; delay?: number } } = {},
+) => ({ type, at, ...opts });
+
+/** Hard cut to another location (set). Pair it with a camera cut at the same moment. Actors/props tagged `set` follow. */
+export const cutTo = (set: SetName): ActionInput => ({ type: "location", actor: "world", set });
 
 export const path = { arc: arcPoints };
 

@@ -76,7 +76,8 @@ const SpeechBubble = ({ text, x, y, scale, opacity, unit, style, t }: {
 
 /** Comic-book sound word ("CRASH!", "HONK!") that pops at a point in the scene. */
 const ComicWord = ({ word, x, y, t, unit }: { word: FrameState["words"][number]; x: number; y: number; t: number; unit: number }) => {
-  const isCrash = word.style === "crash";
+  const isCrash = word.style === "crash" || word.style === "splat";
+  const isSplat = word.style === "splat";
   const scale = popScale(t, word.start, word.end) * (isCrash ? 1 : 0.8);
   const wobble = Math.sin((t - word.start) * 30) * (isCrash ? 3 : 2) * Math.max(0, 1 - (t - word.start) * 2);
   return (
@@ -84,8 +85,8 @@ const ComicWord = ({ word, x, y, t, unit }: { word: FrameState["words"][number];
       style={{
         position: "absolute", left: x, top: y, transform: `translate(-50%, -100%) scale(${scale}) rotate(${(isCrash ? -8 : 6) + wobble}deg)`,
         fontSize: (isCrash ? 130 : 70) * unit, fontWeight: 900, fontStyle: "italic", letterSpacing: 2 * unit,
-        color: isCrash ? "#ffd60a" : "#ffffff", WebkitTextStroke: `${(isCrash ? 9 : 6) * unit}px ${INK}`, paintOrder: "stroke fill",
-        textShadow: `${8 * unit}px ${8 * unit}px 0 ${isCrash ? "#e63946" : INK}`, whiteSpace: "nowrap", opacity: fadeOpacity(t, word.end),
+        color: isSplat ? "#b07a3c" : isCrash ? "#ffd60a" : "#ffffff", WebkitTextStroke: `${(isCrash ? 9 : 6) * unit}px ${INK}`, paintOrder: "stroke fill",
+        textShadow: `${8 * unit}px ${8 * unit}px 0 ${isSplat ? "#4e3319" : isCrash ? "#e63946" : INK}`, whiteSpace: "nowrap", opacity: fadeOpacity(t, word.end),
       }}
     >
       {word.text}
@@ -126,8 +127,8 @@ export const DebugHud = ({ frame, width, height, fps }: { frame: FrameState; wid
   const project = makeProjector(frame.camera, width, height);
   const unit = Math.min(width, height) / 1080;
   const tags = [
-    ...Object.entries(frame.cars).map(([id, car]) => ({ id, point: [car.pos[0], 2.4 + car.lift, car.pos[1]] as const, pos: car.pos })),
-    ...Object.entries(frame.characters).map(([id, person]) => ({ id, point: [person.pos[0], person.pos[1] + 2.1, person.pos[2]] as const, pos: [person.pos[0], person.pos[2]] as const })),
+    ...Object.entries(frame.cars).filter(([id]) => !frame.offstage.includes(id)).map(([id, car]) => ({ id, point: [car.pos[0], 2.4 + car.lift, car.pos[1]] as const, pos: car.pos })),
+    ...Object.entries(frame.characters).filter(([id]) => !frame.offstage.includes(id)).map(([id, person]) => ({ id, point: [person.pos[0], person.pos[1] + 2.1, person.pos[2]] as const, pos: [person.pos[0], person.pos[2]] as const })),
   ];
   const cam = frame.camera.position.map((n) => n.toFixed(1)).join(", ");
   return (

@@ -29,8 +29,11 @@ export const targetSchema = z.union([vec2Schema, anchorSchema]);
 export const STYLES = ["sunny", "sunset", "night", "overcast"] as const;
 export const SETS = ["suburb", "city", "highway", "parking-lot", "empty"] as const;
 export const FORMATS = ["vertical", "landscape", "square"] as const;
-export const PROP_TYPES = ["tree", "pine", "bush", "house", "building", "cone", "lamp", "bench", "mailbox", "garage"] as const;
-export const SOUND_NAMES = ["crash", "honk", "boing", "thud", "whoosh", "door-slam", "pop", "screech"] as const;
+export const PROP_TYPES = [
+  "tree", "pine", "bush", "house", "building", "cone", "lamp", "bench", "mailbox", "garage",
+  "chair", "table", "mug", "dashcam", "bump", "porch",
+] as const;
+export const SOUND_NAMES = ["crash", "honk", "boing", "thud", "whoosh", "door-slam", "pop", "screech", "splat"] as const;
 
 export const FOLLOW_PRESETS = ["wide", "tracking", "low", "high", "overhead", "chase", "front", "side", "side-left", "close", "close-front"] as const;
 
@@ -45,6 +48,8 @@ const characterActions = z.discriminatedUnion("type", [
   z.object({ type: z.literal("say"), actor: z.string(), text: z.string().min(1).max(120), duration: finite.positive().optional() }),
   z.object({ type: z.literal("enter"), actor: z.string(), car: z.string(), seat: enumOf(SEAT_NAMES) }),
   z.object({ type: z.literal("exit"), actor: z.string() }),
+  /** Jump straight to a spot (only on a camera cut — it's a teleport). */
+  z.object({ type: z.literal("place"), actor: z.string(), at: vec2Schema, facing: finite.optional() }),
   z.object({ type: z.literal("feel"), actor: z.string(), mood: enumOf(MOOD_NAMES) }),
   z.object({ type: z.literal("tase"), actor: z.string(), target: z.string(), duration: finite.positive().default(2.4) }),
   z.object({ type: z.literal("yank-dashcam"), actor: z.string(), car: z.string(), duration: finite.positive().default(3) }),
@@ -69,7 +74,13 @@ const carActions = z.discriminatedUnion("type", [
     times: z.number().int().min(1).max(5).default(1), word: z.boolean().default(true),
   }),
   z.object({ type: z.literal("siren"), actor: z.string(), on: z.boolean(), sound: z.boolean().default(true) }),
-  z.object({ type: z.literal("hop"), actor: z.string(), height: finite.positive().default(0.6), duration: finite.positive().default(0.7) }),
+  z.object({
+    type: z.literal("hop"), actor: z.string(), height: finite.positive().default(0.6), duration: finite.positive().default(0.7),
+    /** "boing" for a cartoon hop, "thud" for a heavy bounce (a truck over a bump). */
+    sound: z.enum(["boing", "thud"]).default("boing"),
+  }),
+  /** Mud flies off this car (a dirt truck) and splatters all over another car. */
+  z.object({ type: z.literal("mud"), actor: z.string(), onto: z.string(), amount: z.number().int().min(1).max(40).default(26) }),
   z.object({ type: z.literal("door"), actor: z.string(), door: enumOf(SEAT_NAMES), open: z.boolean(), duration: finite.positive().default(0.4) }),
 ]);
 
@@ -103,6 +114,8 @@ const sceneActions = z.discriminatedUnion("type", [
     type: z.literal("sound"), actor: z.literal("sound"), name: enumOf(SOUND_NAMES),
     at: vec3Schema.optional(), volume: finite.min(0).max(2).default(1),
   }),
+  /** Hard cut to another location: the set changes; actors and props tagged with another set are hidden. */
+  z.object({ type: z.literal("location"), actor: z.literal("world"), set: enumOf(SETS) }),
   z.object({
     type: z.literal("caption"), actor: z.literal("overlay"), text: z.string().min(1).max(120),
     duration: finite.positive().default(2.5), position: z.enum(["top", "center", "bottom"]).default("bottom"),
@@ -133,6 +146,8 @@ export const characterSpecSchema = z.object({
   seatedIn: z.object({ car: z.string(), seat: enumOf(SEAT_NAMES) }).optional(),
   /** Voice id for spoken lines (ElevenLabs voice id or Google voice name). Defaults per character model. */
   voice: z.string().optional(),
+  /** Only on screen (and heard) while this set is showing — for clips that cut between locations. */
+  set: enumOf(SETS).optional(),
 });
 
 export const carSpecSchema = z.object({
@@ -144,6 +159,12 @@ export const carSpecSchema = z.object({
   label: z.string().max(18).optional(),
   /** Little dashcam on the windshield with a blinking record light. */
   dashcam: z.boolean().default(false),
+  /** Text painted across the back (a phone number on a work truck's tailgate). */
+  rearLabel: z.string().max(24).optional(),
+  /** Starts covered in mud. */
+  muddy: z.boolean().default(false),
+  /** Only on screen (and heard) while this set is showing. */
+  set: enumOf(SETS).optional(),
 });
 
 export const propSchema = z.object({
@@ -152,6 +173,12 @@ export const propSchema = z.object({
   facing: finite.default(0),
   scale: finite.positive().default(1),
   color: z.string().optional(),
+  /** Height of the ground under it (e.g. a mug on a table). */
+  y: finite.optional(),
+  /** Only shown while this set is showing. */
+  set: enumOf(SETS).optional(),
+  /** Appears at this time, or when a cue ends (+ delay). */
+  from: z.union([finite, z.object({ cue: z.string(), delay: finite.default(0) })]).optional(),
 });
 
 export const sceneSchema = z.object({

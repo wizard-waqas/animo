@@ -12,7 +12,7 @@ import { Part, shapes } from "./toon";
  * Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action.
  * `shadowMap` is the shadow texture size (0 = no shadow pass; on software WebGL that pass costs more than the frame).
  */
-export const World = ({ style, set, props, focus, debug, shadowMap = 2048 }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean; shadowMap?: number }) => {
+export const World = ({ style, set, props, focus, debug, shadowMap = 2048, time }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean; shadowMap?: number; time: number }) => {
   const setProps = useMemo(() => [...SET_PROPS[set], ...props], [set, props]);
   return (
     <>
@@ -25,7 +25,7 @@ export const World = ({ style, set, props, focus, debug, shadowMap = 2048 }: { s
       {/* Trees are instanced (cheap even by the hundred); everything else is a regular prop. */}
       <Forest trees={setProps.filter((prop) => prop.type === "tree" || prop.type === "pine")} />
       {setProps.filter((prop) => prop.type !== "tree" && prop.type !== "pine").map((prop, index) => (
-        <Prop key={index} prop={prop} night={style.night} />
+        <Prop key={index} prop={prop} night={style.night} time={time} />
       ))}
       {debug && <gridHelper args={[60, 60, "#ff006e", "#c8c8c8"]} position={[0, 0.08, 0]} />}
     </>

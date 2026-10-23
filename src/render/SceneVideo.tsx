@@ -10,7 +10,7 @@ import { type SceneSpec, parseScene } from "../engine/spec";
 import { type VoiceClip, registerVoiceClips } from "../voice/lines";
 import { CarModel } from "./CarModel";
 import { CharacterModel } from "./CharacterModel";
-import { CrashEffect } from "./CrashEffect";
+import { CrashEffect, MudEffect } from "./CrashEffect";
 import { ZapEffect } from "./ZapEffect";
 import { DashcamOverlay, DebugHud, Overlays } from "./Overlays";
 import { STYLE_PRESETS } from "./styles";
@@ -50,17 +50,17 @@ export const SceneVideo = ({ spec: rawSpec, clips, debug = false, preview = fals
     <AbsoluteFill style={{ backgroundColor: style.skyHorizon }}>
       <ThreeCanvas width={width} height={height} shadows={!preview} flat gl={{ antialias: !preview }} camera={{ near: 0.3, far: 900 }}>
         <CameraRig camera={frame.camera} />
-        <World style={style} set={spec.set} props={spec.props} focus={frame.camera.lookAt} debug={debug} shadowMap={preview ? 0 : debug ? 1024 : 2048} />
+        <World style={style} set={frame.set} props={frame.props} focus={frame.camera.lookAt} debug={debug} time={frame.t} shadowMap={preview ? 0 : debug ? 1024 : 2048} />
         {Object.entries(frame.cars).map(([id, state]) => {
           const actor = spec.cast[id];
-          if (actor.kind !== "car") return null;
+          if (actor.kind !== "car" || frame.offstage.includes(id)) return null;
           const shape: CarShape = CARS[actor.model];
           return (
             <CarModel key={id} shape={shape} color={actor.color ?? shape.color} state={state} label={actor.label ?? (shape.extra === "police" ? "POLICE" : undefined)}
-              night={style.night} dashcam={actor.dashcam} time={frame.t} insideView={frame.replay?.car === id} />
+              night={style.night} dashcam={actor.dashcam} time={frame.t} insideView={frame.replay?.car === id} rearLabel={actor.rearLabel} />
           );
         })}
-        {Object.entries(frame.characters).map(([id, state], index) => frame.replay && state.ridingIn === frame.replay.car ? null : (
+        {Object.entries(frame.characters).map(([id, state], index) => (frame.replay && state.ridingIn === frame.replay.car) || frame.offstage.includes(id) ? null : (
           <CharacterModel
             key={id}
             look={compiled.looks[id]}
@@ -73,6 +73,7 @@ export const SceneVideo = ({ spec: rawSpec, clips, debug = false, preview = fals
         {frame.zaps.map((zap, index) => (
           <ZapEffect key={index} zap={zap} />
         ))}
+        <MudEffect blobs={frame.mud} />
         {frame.crashes.map((crash) => (
           <CrashEffect key={crash.time} crash={crash} t={frame.t} cameraPosition={frame.camera.position} />
         ))}

@@ -19,7 +19,7 @@ export interface CarShape {
   /** Z center of the cabin. */
   cabinCenter: number;
   rearDoors: boolean;
-  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo" | "police";
+  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo" | "police" | "dump-bed";
 }
 
 export const CARS = {
@@ -69,6 +69,12 @@ export const CARS = {
     bodyBottom: 0.3, beltline: 0.97, roof: 1.7, cabinLength: 2.3, cabinCenter: -0.2, rearDoors: true,
     extra: "police",
   },
+  "dump-truck": {
+    label: "Dirt truck (cab-over, dump bed full of dirt)", color: "#f4a300",
+    length: 6.8, width: 2.4, wheelRadius: 0.55, wheelbase: 4.0,
+    bodyBottom: 0.55, beltline: 1.45, roof: 2.75, cabinLength: 1.6, cabinCenter: 2.5, rearDoors: false,
+    extra: "dump-bed",
+  },
 } satisfies Record<string, CarShape>;
 
 export type CarModel = keyof typeof CARS;
@@ -107,3 +113,32 @@ export const seatLayout = (shape: CarShape, seat: SeatName): SeatLayout | undefi
 };
 
 export const availableSeats = (shape: CarShape) => SEAT_NAMES.filter((seat) => seatLayout(shape, seat));
+
+/** Where mud lands on a car, in its local space (x, y, z). `normal` is the surface it sticks to. */
+export interface MudSpot { pos: [number, number, number]; normal: "up" | "front"; size: number }
+
+/**
+ * Mud splat spots for a car, most visible first (windshield, hood, front), then roof and sides.
+ * Deterministic, so a car that starts `muddy` looks the same as one that just got splattered.
+ */
+export const mudSpots = (shape: CarShape): MudSpot[] => {
+  let seed = 11;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const front = shape.length / 2;
+  const glassFront = shape.cabinCenter + (shape.cabinLength - 0.1) / 2;
+  const halfWidth = shape.width / 2 - 0.15;
+  const spots: MudSpot[] = [];
+  const add = (count: number, make: () => MudSpot) => {
+    for (let i = 0; i < count; i++) spots.push(make());
+  };
+  const across = (scale = 1) => (random() * 2 - 1) * halfWidth * scale;
+  add(7, () => ({ pos: [across(0.8), shape.beltline + 0.08 + random() * (shape.roof - shape.beltline - 0.22), glassFront + 0.03], normal: "front", size: 0.09 + random() * 0.08 }));
+  add(7, () => ({ pos: [across(), shape.beltline + 0.005, glassFront + 0.2 + random() * Math.max(0.2, front - glassFront - 0.4)], normal: "up", size: 0.11 + random() * 0.12 }));
+  add(5, () => ({ pos: [across(), shape.bodyBottom + 0.1 + random() * (shape.beltline - shape.bodyBottom - 0.2), front + 0.01], normal: "front", size: 0.08 + random() * 0.07 }));
+  add(6, () => ({ pos: [across(0.85), shape.roof + 0.005, shape.cabinCenter + (random() - 0.4) * shape.cabinLength * 0.8], normal: "up", size: 0.1 + random() * 0.1 }));
+  add(5, () => ({ pos: [across(), shape.beltline + 0.005, -front + 0.2 + random() * Math.max(0.2, shape.cabinCenter - shape.cabinLength / 2 + front - 0.3)], normal: "up", size: 0.09 + random() * 0.09 }));
+  return spots;
+};

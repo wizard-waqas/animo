@@ -2,4 +2,53 @@
 import type { VoiceClip } from "../src/voice/lines";
 
 export type { VoiceClip };
-export const VOICE_CLIPS: Record<string, VoiceClip> = {};
+export const VOICE_CLIPS: Record<string, VoiceClip> = {
+  "0bb9ec30": {
+    "file": "0bb9ec30.wav",
+    "duration": 2.223,
+    "envelope": "01wHJMMNMOSWZXSOOKLQXUORXWSSSTTVVXVTVTSSQOLIKJJHFCEExuopi8000000000000000001gkMRICDBl700001kxxqc6314VWTMMLMPRURPOSWFNTIKLCAvqmhjhc4800",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "NOOO!\nMy car!!"
+  },
+  "25580a13": {
+    "file": "25580a13.wav",
+    "duration": 0.882,
+    "envelope": "05ayTHMXTZUVRTSUWMNNRPHHFAzAuyuBsqwwHyrpmlfe988310000",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Aah."
+  },
+  "5bfc22a9": {
+    "file": "5bfc22a9.wav",
+    "duration": 2.764,
+    "envelope": "00vLWZSUNPyf3007xJFBBrvxjPPIxn80000000ntk926RNJwigrDBrjdfkmvCuxqq70000jc956xKKHFyxquooihkhjkhmkqqsqopmnmkjg9434500000000000000003lwNSVVTVve00009a30DVLHBxupjic9643029a",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Your truck covered my car\nin mud. You're paying!"
+  },
+  "69bdc235": {
+    "file": "69bdc235.wav",
+    "duration": 2.17,
+    "envelope": "00016aejjkQSMGBqjdhksRTTUPLLLKKNNKwiddjgBMMNONKKGFBua00012221100021000rQZuc09murpEJNKs007xIIxnkqLTSPPLMMNNEm24l8mksLTLPQONKIHGDBvp9",
+    "provider": "elevenlabs",
+    "voice": "EXAVITQu4vr4xnSDxMaL",
+    "text": "So sorry, sir!\nA check is on its way!"
+  },
+  "97fa7401": {
+    "file": "97fa7401.wav",
+    "duration": 1.191,
+    "envelope": "026VZWSROHBzlmggd5005wWYXTXVIDloDwr50631rFFIGHIGFHHJAzxuuojfaa6200000003",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Thanks, Dashcam."
+  },
+  "fd961a77": {
+    "file": "fd961a77.wav",
+    "duration": 2.505,
+    "envelope": "0034ecajlb49QZOFysmfcf600bmog9100000000000000000000000000007GONKJDADDDDBKOSOAuvuokMLHEBxpjdab98687dcjozEMNOJJEiEPNGxrqsuCAf7027fkonmcNFHQCAy89500008fdm",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Wait... their number's\nright on the truck!"
+  }
+};

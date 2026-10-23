@@ -144,3 +144,20 @@ const SmokePuff = ({ puff, age }: { puff: Puff; age: number }) => {
     />
   );
 };
+
+/** Clumps of mud in flight, stretched along their direction of travel. */
+export const MudEffect = ({ blobs }: { blobs: { point: Vec3; size: number; stretch: Vec3 }[] }) => (
+  <>
+    {blobs.map((blob, index) => {
+      const speed = Math.hypot(...blob.stretch) || 1;
+      const direction = new THREE.Vector3(blob.stretch[0] / speed, blob.stretch[1] / speed, blob.stretch[2] / speed);
+      const rotation = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction));
+      const radius = Math.max(0.12, blob.size * 1.1);
+      return (
+        <group key={index} position={blob.point} rotation={rotation}>
+          <Part geometry={shapes.sphere(1)} color={index % 2 ? "#5c3d1e" : "#6f4a24"} scale={[radius, radius * 1.6, radius]} outline={0.012} shadow={false} />
+        </group>
+      );
+    })}
+  </>
+);

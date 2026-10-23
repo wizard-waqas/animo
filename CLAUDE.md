@@ -178,7 +178,7 @@ export default scene({
 
 `walkTo(target, {facing?, speed?})`, `runTo`, `turnTo(target|deg)`, `face(other)`, `play(clip)`, `say(text)`,
 `feel(mood)`, `enter(car, seat)` (walks to the door first), `exit()`, `spot("front"|"behind"|"left"|"right", dist)`,
-`tase(person)`, `yankDashcam(car)`.
+`tase(person)`, `yankDashcam(car)`, `place(at, facing)` (teleport — only on a cut).
 - Walks route around parked cars on smooth curves.
 - Gesture clips layer on top of walking/sitting (wave while walking, wave from a car). Body clips need the person standing.
 - Holding clips (`tased`) keep their end pose until the next body action, which blends out of it (`play("get-up")`).
@@ -204,15 +204,31 @@ export default scene({
   "CRASH!", camera shake, crash sound.
 - `police` model: light bar + siren. `siren(true)` lights + wail, `siren(true, { sound: false })` lights only.
 - `path.arc(center, radius, fromDeg, toDeg, steps)` gives points for donuts / U-turns.
+- `dump-truck` (dirt truck) + `truck.mudOnto(car)`: clumps arc off the back and land on the target's windshield,
+  hood, bumper and roof (it can be moving), "SPLAT!", splat sounds; the mud stays. Car options `muddy: true` (starts
+  dirty, same splat layout), `rearLabel` (tailgate text, readable in a zoomed dashcam replay). `hop({ sound: "thud" })`
+  for a truck over a `bump` prop.
 
 ### Camera
 
 `camera.follow(target, preset, {blend, offset, local, smooth})`, `camera.still(pos, lookAt, {blend})` (lookAt can be
 an actor — it pans with it), `camera.orbit(...)`, `camera.moveTo(...)`, `camera.shake(...)`,
-`camera.replay(car, {from, to})` (that car's dashcam footage of an earlier moment, REC overlay, original audio through
+`camera.replay(car, {from, to, fov})` (that car's dashcam footage of an earlier moment, REC overlay, original audio through
 a small-screen filter — put a shot right after it).
 - Follow cameras use look-ahead smoothing; smoothing never crosses an impact, so hits land hard.
 - Prefer hard cuts over long blends; a blend can also fly the camera through objects. Inspect flags lurches.
+
+### Locations (multi-scene clips)
+
+- `cutTo("suburb")` (timeline entry) hard-cuts to another set; put a camera cut at the same cue. Tag actors and props
+  with `set: "highway"` etc. so they only show (and are heard) in that location; untagged ones show everywhere.
+- Use separate actors per location when someone changes places between scenes (same model = same voice), or
+  `place()` the same person on each cut. Dashcam replays show the location of the replayed moment.
+- `prop(type, at, { y, set, from })`: `y` lifts it (mug on a table at 0.72), `from: { cue, delay }` makes it appear
+  then (a mug set down on the table). Porch furniture: `porch`, `chair` (seat 0.45, back toward -Z), `table`, `mug`,
+  `dashcam`. Seat someone with `place(chairPos, chairFacing)` + `play("sit-chair", { duration: 0.02 })` on the cut;
+  `hold-mug` / `sip` / `set-down` / `look-left|right` layer on top. `show-check` holds up a $1,000,000 check.
+- Example: `scenes/mud-money.scene.ts` (highway → home → company yard → mailbox → porch).
 
 ### Overlays & sound
 

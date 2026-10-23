@@ -79,4 +79,10 @@ export const PROP_BOUNDS: Record<PropSpec["type"], { radius: number; height: num
   lamp: { radius: 0.3, height: 5.0 },
   bench: { radius: 0.9, height: 1.0 },
   mailbox: { radius: 0.3, height: 1.35 },
+  chair: { radius: 0.35, height: 0.95 },
+  table: { radius: 0.42, height: 0.74 },
+  mug: { radius: 0.06, height: 0.13 },
+  dashcam: { radius: 0.12, height: 0.21 },
+  bump: { radius: 0.4, height: 0.13 },
+  porch: { radius: 0.2, height: 2.7 },
 };

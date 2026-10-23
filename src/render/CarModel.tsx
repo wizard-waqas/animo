@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-import { type CarShape, type SeatName, availableSeats, seatLayout } from "../catalog/cars";
+import { type CarShape, type SeatName, availableSeats, mudSpots, seatLayout } from "../catalog/cars";
 import type { CarState } from "../engine/carTrack";
 import { Part, shapes } from "./toon";
 
@@ -18,10 +18,12 @@ interface CarModelProps {
   time: number;
   /** Filming from inside this car (dashcam replay): hide the cabin and dashcam, keep the hood in view. */
   insideView?: boolean;
+  /** Text across the back (tailgate). */
+  rearLabel?: string;
 }
 
 /** Procedural cartoon car. Forward is +Z; the driver (left) side is +X. */
-export const CarModel = ({ shape, color, state, label, night, dashcam, time, insideView }: CarModelProps) => {
+export const CarModel = ({ shape, color, state, label, night, dashcam, time, insideView, rearLabel }: CarModelProps) => {
   const wheelX = shape.width / 2 - 0.12;
   const wheelZ = shape.wheelbase / 2;
   const bodyHeight = shape.beltline - shape.bodyBottom;
@@ -44,7 +46,9 @@ export const CarModel = ({ shape, color, state, label, night, dashcam, time, ins
         ))}
         {shape.extra === "police" && <LightBar shape={shape} on={state.siren} time={time} />}
         {label && <DoorLabels shape={shape} text={label} />}
+        {rearLabel && <RearLabel shape={shape} text={rearLabel} />}
         <Extras shape={shape} color={color} />
+        {state.mud.length > 0 && <Mud shape={shape} splats={state.mud} insideView={insideView} />}
         {dashcam && !insideView && <Dashcam shape={shape} time={time} tug={state.dashcamTug} />}
       </group>
     </group>
@@ -195,12 +199,57 @@ const labelTexture = (text: string) => {
   return texture;
 };
 
+const MUD_COLORS = ["#5c3d1e", "#6f4a24", "#4e3319", "#7a5530"];
+
+/** Mud splats: flattened blobs that squash in when they land, plus a few drips on the vertical ones. */
+const Mud = ({ shape, splats, insideView }: { shape: CarShape; splats: CarState["mud"]; insideView?: boolean }) => {
+  const spots = useMemo(() => mudSpots(shape), [shape]);
+  return (
+    <>
+      {splats.map(({ spot, age }) => {
+        const where = spots[spot];
+        if (!where) return null;
+        // Windshield splats would sit right in front of the dashcam's lens.
+        if (insideView && where.normal === "front" && where.pos[1] > shape.beltline) return null;
+        const landed = Math.min(1, age / 0.12);
+        const spread = where.size * (0.6 + 0.4 * landed);
+        const color = MUD_COLORS[spot % MUD_COLORS.length];
+        const flat = where.normal === "up" ? ([spread, 0.035 + 0.05 * (1 - landed), spread * 0.85] as const) : ([spread, spread * 0.85, 0.035 + 0.05 * (1 - landed)] as const);
+        return (
+          <group key={spot} position={where.pos}>
+            <Part geometry={shapes.sphere(1)} color={color} scale={[...flat]} outline={0.01} shadow={false} />
+            <Part geometry={shapes.sphere(1)} color={color} position={where.normal === "up" ? [spread * 0.7, 0, spread * 0.3] : [spread * 0.6, spread * 0.4, 0]} scale={where.normal === "up" ? [spread * 0.35, 0.03, spread * 0.3] : [spread * 0.3, spread * 0.3, 0.03]} outline={false} shadow={false} />
+            {where.normal === "front" && (
+              <Part geometry={shapes.capsule(0.03, spread * 0.6 * Math.min(1, age / 1.5))} color={color} position={[spread * -0.2, -spread * (0.6 + 0.3 * Math.min(1, age / 1.5)), 0.01]} outline={false} shadow={false} />
+            )}
+          </group>
+        );
+      })}
+    </>
+  );
+};
+
+/** Text across the back of the vehicle (on a dump truck: the tailgate, big enough to read from behind). */
+const RearLabel = ({ shape, text }: { shape: CarShape; text: string }) => {
+  const texture = useMemo(() => labelTexture(text), [text]);
+  const width = shape.width * 0.92;
+  const y = shape.extra === "dump-bed" ? shape.beltline + 0.55 : shape.bodyBottom + (shape.beltline - shape.bodyBottom) * 0.55;
+  return (
+    <mesh position={[0, y, -shape.length / 2 - 0.035]} rotation={[0, Math.PI, 0]}>
+      <planeGeometry args={[width, width / 4]} />
+      <meshBasicMaterial map={texture} transparent depthWrite={false} />
+    </mesh>
+  );
+};
+
 /** Business name painted on both sides, just below the windows. */
 const DoorLabels = ({ shape, text }: { shape: CarShape; text: string }) => {
   const texture = useMemo(() => labelTexture(text), [text]);
-  const width = Math.min(shape.length * 0.55, 2.6);
-  const y = shape.bodyBottom + (shape.beltline - shape.bodyBottom) * 0.45;
-  const z = shape.extra === "cargo" ? -0.6 : -0.3;
+  const dumpBed = shape.extra === "dump-bed";
+  const width = Math.min(shape.length * 0.55, dumpBed ? 3.6 : 2.6);
+  // Dump trucks wear their name on the bed walls.
+  const y = dumpBed ? shape.beltline + 0.55 : shape.bodyBottom + (shape.beltline - shape.bodyBottom) * 0.45;
+  const z = shape.extra === "cargo" ? -0.6 : dumpBed ? -0.95 : -0.3;
   return (
     <>
       {[1, -1].map((side) => (
@@ -236,6 +285,33 @@ const Extras = ({ shape, color }: { shape: CarShape; color: string }) => {
           ))}
         </>
       );
+    case "dump-bed": {
+      // Steel tub behind the cab, heaped with dirt, with a ribbed tailgate.
+      const bedFront = shape.cabinCenter - shape.cabinLength / 2 - 0.12;
+      const bedBack = -shape.length / 2;
+      const bedLength = bedFront - bedBack;
+      const wallTop = shape.beltline + 1.1;
+      const wallHeight = wallTop - shape.beltline;
+      const centerZ = (bedFront + bedBack) / 2;
+      return (
+        <>
+          {[1, -1].map((side) => (
+            <Part key={side} geometry={shapes.box(0.1, wallHeight, bedLength, 0.04)} color={color} position={[side * (shape.width / 2 - 0.05), shape.beltline + wallHeight / 2, centerZ]} />
+          ))}
+          <Part geometry={shapes.box(shape.width, wallHeight + 0.3, 0.12, 0.04)} color={color} position={[0, shape.beltline + (wallHeight + 0.3) / 2, bedFront]} />
+          <Part geometry={shapes.box(shape.width, wallHeight, 0.1, 0.04)} color={color} position={[0, shape.beltline + wallHeight / 2, bedBack + 0.05]} />
+          {/* The dirt heap. */}
+          <Part geometry={shapes.sphere(1)} color="#6f4a24" position={[0, wallTop - 0.15, centerZ]} scale={[shape.width * 0.47, 0.55, bedLength * 0.47]} />
+          <Part geometry={shapes.sphere(1)} color="#5c3d1e" position={[0.3, wallTop + 0.15, centerZ - 0.6]} scale={[0.6, 0.35, 0.8]} />
+          <Part geometry={shapes.sphere(1)} color="#7a5530" position={[-0.35, wallTop + 0.1, centerZ + 0.7]} scale={[0.55, 0.3, 0.7]} />
+          {/* Black bumper and mud flaps. */}
+          <Part geometry={shapes.box(shape.width, 0.18, 0.2, 0.04)} color={TRIM} position={[0, shape.bodyBottom - 0.05, bedBack]} />
+          {[1, -1].map((side) => (
+            <Part key={side} geometry={shapes.box(0.5, 0.5, 0.04, 0.02)} color="#1d1b26" position={[side * (shape.width / 2 - 0.35), 0.45, -shape.wheelbase / 2 - shape.wheelRadius - 0.15]} outline={false} />
+          ))}
+        </>
+      );
+    }
     case "roof-rack":
       return (
         <>
