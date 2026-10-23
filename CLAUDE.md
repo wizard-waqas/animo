@@ -30,6 +30,7 @@ sets, sound effects — built in code. No model or audio asset files. Only voice
    After recording, re-run inspect: line lengths come from the recordings, so cue timings shift.
 7. `npm run render -- <id> --preview` (30fps, half size) → `npm run render -- <id>` final.
    `--scale 0.75` (810×1440) is a good phone-sized final; the scale must give whole pixels.
+   `--from`/`--to` (seconds or a cue name) render one slice of a long clip.
 8. `npm run check` (typecheck + tests) after engine changes. Commit and push.
 
 Rendering speed: the cloud container has no GPU (software WebGL, 4 cores) — a 60s 60fps clip took ~50 min.
