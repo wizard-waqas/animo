@@ -114,18 +114,46 @@ export const recordVoices = async (spec: SceneSpec, options: { force?: boolean }
     return missing.length;
   }
   const clips: Record<string, VoiceClip> = { ...VOICE_CLIPS };
+  let failed = 0;
   for (const line of missing) {
     const voice = resolveVoice(line.identity, provider);
     process.stdout.write(`  ${line.character} (${line.mood}): "${line.text.replace(/\n/g, " ")}" … `);
-    const samples = tidy(await synthesize(provider, voice, line.script, line.mood));
+    let raw: Float32Array;
+    try {
+      raw = await synthesize(provider, voice, line.script, line.mood);
+    } catch (error) {
+      failed++;
+      console.log(`FAILED\n    ${explainFailure(provider, error)}`);
+      if (failed >= 2 && failed === missing.indexOf(line) + 1) {
+        console.log("  Stopping: the voice service isn't working. The video will render without voices.");
+        return missing.length;
+      }
+      continue;
+    }
+    const samples = tidy(raw);
     const file = `${line.key}.wav`;
     writeFileSync(path.resolve("voices", file), encodeMonoWav(samples));
     clips[line.key] = { file, duration: Math.round((samples.length / SAMPLE_RATE) * 1000) / 1000, envelope: envelopeOf(samples), provider, voice, text: line.script };
     writeManifest(clips);
     console.log(`${clips[line.key].duration}s`);
   }
-  console.log(`${spec.id}: recorded ${missing.length} line(s) with ${provider}. Timings now follow the recordings — re-run inspect.`);
-  return 0;
+  const recorded = missing.length - failed;
+  console.log(`${spec.id}: recorded ${recorded} line(s) with ${provider}${failed ? `, ${failed} failed` : ""}. Timings now follow the recordings.`);
+  return failed;
+};
+
+/** Turn network/API errors into something actionable. */
+const explainFailure = (provider: VoiceProvider, error: unknown) => {
+  const host = provider === "elevenlabs" ? "api.elevenlabs.io" : "texttospeech.googleapis.com";
+  const cause = (error as { cause?: { code?: string } })?.cause?.code;
+  if (cause === "ENOTFOUND" || cause === "ECONNREFUSED" || cause === "ECONNRESET" || cause === "ETIMEDOUT") {
+    return `Can't reach ${host} (${cause}). Check your internet connection, or the network allow-list if you're on a restricted machine.`;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (/\b401\b/.test(message)) return `${provider} rejected the API key (401). Check the key in .env.local.`;
+  if (/\b402\b|quota|credits/i.test(message)) return `${provider} says the account is out of credits or needs a paid plan: ${message}`;
+  if (/\b404\b/.test(message)) return `${provider} doesn't know this voice. Run \`npm run voices -- --list\` and set a voice on the character. (${message})`;
+  return message;
 };
 
 const listVoices = async () => {

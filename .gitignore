@@ -2,3 +2,6 @@ node_modules
 out
 .DS_Store
 public/audio
+.env
+.env.local
+.env*.local

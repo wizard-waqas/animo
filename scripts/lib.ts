@@ -1,5 +1,12 @@
+import { existsSync } from "node:fs";
 import { scenes } from "../scenes";
 import type { SceneSpec } from "../src/engine/spec";
+
+// API keys (ELEVENLABS_API_KEY, GOOGLE_TTS_API_KEY) can live in .env.local or .env. Variables already set in
+// the shell win. Both files are git-ignored so keys never get committed.
+for (const file of [".env.local", ".env"]) {
+  if (existsSync(file)) process.loadEnvFile(file);
+}
 
 export const findScene = (id: string | undefined): SceneSpec => {
   const available = scenes.map((scene) => scene.id).join(", ");

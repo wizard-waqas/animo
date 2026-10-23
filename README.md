@@ -5,7 +5,7 @@ Built on Remotion + React Three Fiber. No 3D model files: every character, car a
 
 ## Setup
 
-Needs Node 20+.
+Needs Node 20.12+ (the current LTS is fine).
 
 ```bash
 npm install
@@ -16,7 +16,8 @@ npm run studio
 
 ## Voices (realistic AI speech)
 
-Dialogue uses a realistic AI voice service. Pick one and set its key as an environment variable:
+Dialogue uses a realistic AI voice service. Pick one and put its key in a `.env.local` file in this folder
+(it's git-ignored), e.g. `ELEVENLABS_API_KEY=your_key`. A key set in your terminal also works and takes priority:
 
 - **ElevenLabs** (recommended, best acting): `ELEVENLABS_API_KEY`
 - **Google Cloud Text-to-Speech** (Chirp 3 HD voices): `GOOGLE_TTS_API_KEY`
