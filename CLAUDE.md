@@ -36,6 +36,90 @@ sets, sound effects — built in code. No model or audio asset files. Only voice
 Rendering speed: the cloud container has no GPU (software WebGL, 4 cores) — a 60s 60fps clip took ~50 min.
 Iterate with stills; render once. The user can render locally much faster.
 
+## Tips & tricks for driving the tool
+
+These came out of building the first clips. Most mistakes are cheap to catch with `inspect` and stills, and
+expensive to catch after a 50-minute render.
+
+### Before writing
+
+- **Pull first** (`git fetch origin main` + fast-forward). Other sessions push fixes and merge PRs between
+  conversations; never build on a stale checkout.
+- Run `npm run catalog` instead of trusting memory: models, clips, moods and sounds get added over time.
+- Sketch the story as beats with rough times, then add up the seconds. Exits (1.6s), enters (1.7s+walk), walks
+  (~1.55 m/s), voice lines (~2.8 words/s) and blocking add up fast. A "simple" crash-and-argue story ran 90s on the
+  first pass. Trim travel (park cars close to the action, run instead of walk, start actors near their marks)
+  before trimming beats the user asked for.
+- Lay out the stage with coordinates first: where the cars stop, where each person stands, which side of each car
+  the doors face (driver = car's left = +X local). Most framing problems are staging problems.
+
+### Writing the timeline
+
+- **Chain with cues** (`.as("crash")`, `after("crash", …, 0.6)`), not absolute times. Walk, enter/exit and voice
+  durations are computed, and recordings change line lengths, so hand-computed times drift.
+- `after(actor, …)` waits for that actor's latest-*listed* action. For camera/caption entries (planned last), that's
+  the actor's final action in the whole scene, which is rarely what you mean. Use a named cue.
+- List a car's actions before the people who depend on where it is (getting in, walking around it). The read-guard
+  error "Move it earlier in the timeline" means a later-listed action changes something an earlier one already used.
+- Use a person's spot (`driverA.spot("front", 1.5)`) to make people face each other, and resolve it *after* that
+  person has reached their mark (`after("a-ready", …)`). Otherwise the spot is computed from where they were.
+- Cars that are already moving: `fromSpeed` on the first drive. Cars that leave: end the drive after the scene ends,
+  or ease to a stop. A car parked off-screen can enter at speed (`fromSpeed`) when a cue fires.
+- `crashInto` handles moving targets. Give the striker a `brake` (late, too-gentle stop) for a believable hit; check
+  the closing speed in the inspect label (~8–12 m/s reads as a solid crash).
+- Held poses (`tased`) stay until the next body action; follow with `play("get-up")` before walking away.
+- Don't pass `duration` to `say()`. For emphasis use mood (`feel("angry")` → red shouting bubble) or tags
+  (`"[whispers] …"`). Line breaks with `\n` keep vertical bubbles narrow.
+
+### Reading inspect
+
+- The TIMELINE shows every resolved start/end and `#cue`. Use those times for `stills --at` and `render --from/--to`.
+- `--at 9.6,14` prints exact positions at those times. Use them to aim static cameras (`camera.still`).
+- "ends after the scene ends" on an action the user should see is a real problem: extend the duration or tighten
+  earlier beats. On a drive-off it's fine (drives are exempt).
+- "no voice recording yet" is informational in the cloud: timing is estimated, and real recordings will shift it.
+- SMOOTHNESS "lurches" are camera moves that are too far or too fast: use a hard cut or a longer blend.
+  "Hitches" on people or cars usually mean a kink: a path that doesn't leave along the car's heading, or a speed
+  jump between drives.
+
+### Checking frames
+
+- Pick still times at the moments that matter: each line of dialogue, the crash, the reveal, the last frame.
+  8 per sheet is readable; render two sheets for long clips.
+- Debug tags (names + coordinates) are the fastest way to see who is where. Use `--clean` to judge the look.
+- Look for: speaker off screen when talking, one person hiding another, camera inside a car or tree, a blend
+  flying through a car, empty frames (vertical frames are narrow — the subject is often just off the edge),
+  and set dressing too close to the lens.
+- Zoom in when something looks off: render one frame with a bigger `--scale` and crop it. That's how a line across
+  faces (a 800m mesh) and shadow acne were found.
+- Re-check after fixing: a fix in one shot can break the next one (a new camera cue overlapping an old one, a
+  character moved into another's path).
+
+### Checking sound
+
+- The `sound` summary lists every event with times. Compare them to the TIMELINE (honks at the honk, crash at the
+  impact, footsteps only while walking, squeal only on hard braking).
+- In the spectrogram: tonal sounds are horizontal lines (honk, siren, squeal), hits are vertical bands (crash,
+  doors, footsteps). Wide static where a tone should be means a broken oscillator; long horizontal lines after a
+  crash means it rings like a bell.
+- Peak level should stay under 0 dBFS (the limiter guarantees it). Around -1 to -6 dBFS is normal.
+
+### Rendering in the cloud
+
+- Run long renders in the background, so the session stays responsive, and watch the progress lines (frames, fps,
+  ETA). A busy Chrome at ~360% CPU on 4 cores is normal.
+- Phone-sized final: `--scale 0.75`. Use `--from/--to` to re-render only the part that changed when iterating on a
+  long clip.
+- Send the MP4 with SendUserFile when it's done, with a one-line caption (length, fps, sound).
+
+### Voices
+
+- Recordings live in `voices/` and are keyed by voice + mood + text. Editing any of them re-records that line. If
+  the user recorded locally, pull before rendering so their recordings are reused instead of re-requested.
+- After new recordings land, re-run inspect: everything chained after a line moves.
+- Default ElevenLabs voice ids are unverified on the user's account; `npm run voices -- --list` shows what exists.
+  On non-Pro plans voices come in at 24 kHz (the default); `ELEVENLABS_SAMPLE_RATE=44100` needs Pro.
+
 ## World conventions
 
 - Y is up. Ground positions are `[x, z]`. Camera positions are `[x, y, z]`.
