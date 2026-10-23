@@ -1,55 +1,63 @@
 # Animo — notes for Claude
 
-Cartoony 3D clips (people + cars, under 30s) written as code. The user describes a clip; Claude writes
-the scene, checks it, and renders it. The user never animates by hand.
+Cartoony 3D clips of people and cars (usually under 30s, max 60s) written as code. The user describes a clip in
+plain words; Claude writes the scene, checks it, renders it and sends the video. The user never animates by hand.
 
-Stack: Remotion (video) + React Three Fiber (3D) + TypeScript + Zod. All characters, cars and sets are
-procedural (built from primitives in code) — no model files, nothing to download.
+Stack: Remotion (video) + React Three Fiber (3D) + TypeScript + Zod. Everything is procedural — characters, cars,
+sets, sound effects — built in code. No model or audio asset files. Only voices come from an API (cached in `voices/`).
+
+## Working with the user
+
+- They often follow along on their phone: send finished videos with SendUserFile; keep replies short.
+- Describe the clip back in story terms ("she snaps and goes for the dashcam"), not code terms.
+- If a request would push past ~30s, say so and suggest what to trim — but keep story beats they asked for.
+- Never mock missing pieces (no fake voices). Say what's missing and what it takes.
 
 ## The loop (always follow it)
 
-1. `npm run catalog` — what exists (characters, cars, clips, camera presets, sets, styles).
+1. `npm run catalog` — what exists (characters, cars, clips, moods, sounds, camera presets, sets, styles).
 2. Write `scenes/<id>.scene.ts`, register it in `scenes/index.ts`.
-3. `npm run inspect -- <id>` — resolved timeline, positions, **warnings** and **smoothness** report.
-   Fix every warning before rendering. It catches: walking through cars, cars overlapping, cars moving while
-   someone gets in, props blocking the camera, cars stopping dead/starting instantly, actions running past
-   the end, camera lurches and motion hitches.
-4. `npm run stills -- <id>` — contact sheet at `out/<id>/sheet.png` (debug tags: names, coords, time, grid).
-   **Look at it** (Read the PNG). Check framing, who's visible, faces toward camera, overlaps.
-   `--at 2,4.5,8` for specific moments, `--clean` for no debug overlay.
-5. `npm run sound -- <id> --spectrogram` — builds the soundtrack and prints every sound event (footsteps, honks,
-   crash, doors, squeal spans, peak level). The spectrogram PNG (`out/<id>/sound.png`) is how to "listen": check
-   events line up and nothing turns into broadband noise. render/stills/studio regenerate sound automatically.
-6. `npm run voices -- <id>` — records realistic voices for new `say()` lines (needs `ELEVENLABS_API_KEY` or
-   `GOOGLE_TTS_API_KEY`), saved in `voices/` + `voices/manifest.ts`. **Commit them** — re-renders never pay twice.
-   After recording, re-run inspect: line lengths now come from the recordings and cue timings shift.
-7. `npm run render -- <id> --preview` (30fps, half size) → then `npm run render -- <id>` for the final.
-   `--scale 0.75` (810×1440) is a good phone-sized final. The scale must give whole pixels.
-8. `npm run check` (typecheck + tests) after engine changes.
+3. `npm run inspect -- <id>` — resolved timeline, positions, **warnings** and **smoothness**. Fix every warning
+   before rendering. It catches: walking through cars, cars overlapping, cars moving while someone gets in, props
+   blocking the camera, cars stopping dead/starting instantly, actions running past the end, camera lurches, hitches.
+   Inspect can't judge framing — that's step 4.
+4. `npm run stills -- <id> --at 2,4.5,8` — contact sheet at `out/<id>/sheet.png` with debug tags (names, coords,
+   time, grid); `--clean` for none. **Read the PNG.** Check: is the subject in frame, is the speaker visible when
+   they talk, is anyone hidden behind someone/something, does the camera pass through objects.
+5. `npm run sound -- <id> --spectrogram` — prints every sound event and writes `out/<id>/sound.png`. That's how to
+   "listen": events line up, no unintended broadband noise or sustained tones.
+6. `npm run voices -- <id>` — records `say()` lines with a realistic AI voice (render does this automatically).
+   After recording, re-run inspect: line lengths come from the recordings, so cue timings shift.
+7. `npm run render -- <id> --preview` (30fps, half size) → `npm run render -- <id>` final.
+   `--scale 0.75` (810×1440) is a good phone-sized final; the scale must give whole pixels.
+8. `npm run check` (typecheck + tests) after engine changes. Commit and push.
+
+Rendering speed: the cloud container has no GPU (software WebGL, 4 cores) — a 60s 60fps clip took ~50 min.
+Iterate with stills; render once. The user can render locally much faster.
 
 ## World conventions
 
 - Y is up. Ground positions are `[x, z]`. Camera positions are `[x, y, z]`.
-- Headings/facing in **degrees**: `0` = facing +Z (toward the default camera), `90` = +X (screen right),
-  `180` = away from camera, `270` = screen left.
-- Car local space: forward +Z, the car's **left (driver side, US) is +X**. A car facing 90° has its driver
-  side toward -Z (away from a camera at +Z) and its passenger side toward the camera.
-- Sets (`src/catalog/sets.ts` has exact layouts): road along X centered on z=0. Lanes: z=+1.8 heading +X,
-  z=-1.8 heading -X. Suburb houses at z=-16, driveways at x=0, ±16, ±32. Parking lot asphalt x -35..35, z -28..16.
-  The front (z > 6) is kept clear for cameras.
-- Highway set (forest highway): eastbound lanes z=1.8 (fast) and z=5.4, shoulders z≈-0.6 and 8.3, guardrails
-  z=-1.3 and 10, walls of 7–10m pines beyond both. Cameras must stay in the corridor (z -1…11) or above y≈11.
+- Facing in **degrees**: `0` = +Z (toward the default camera), `90` = +X (screen right), `180` = away, `270` = left.
+- Car local space: forward +Z, the car's **left (driver side, US) is +X**. A car facing 90° has its driver side
+  toward -Z and its passenger side toward +Z.
 - Sizes: people ~1.6–1.8m (kid ~1.1m). Sedan 4.4×1.9m. Walk 1.55 m/s, run 3.4 m/s. Default drive speed 8 m/s.
+- Sets (exact layouts in `src/catalog/sets.ts`):
+  - suburb / city: road along X centered on z=0. Lanes z=+1.8 (heading +X), z=-1.8 (heading -X). Suburb houses at
+    z=-16, driveways at x=0, ±16, ±32. The front (z > 6) is clear for cameras.
+  - highway (forest highway): eastbound lanes z=1.8 (fast) and z=5.4, shoulders z≈-0.6 and 8.3, guardrails z=-1.3
+    and 10, walls of 7–10m pines beyond. Cameras stay in the corridor (z -1…11) or above y≈11.
+  - parking-lot: asphalt x -35..35, z -28..16. empty: just ground.
 
 ## Writing scenes (`src/engine/dsl.ts`)
 
 ```ts
-const sedan = car("sedan", "sedan", { at: [-34, 1.8], facing: 90, color: "#e63946", label: "OPTIONAL TEXT" });
+const sedan = car("sedan", "sedan", { at: [-34, 1.8], facing: 90, color: "#e63946", dashcam: true });
 const mike  = character("mike", "casual-guy", { at: [1.6, 5.4], facing: 200 });
 const sara  = character("sara", "casual-girl", { at: [0, 0], seatedIn: { car: sedan, seat: "driver" } });
 
 export default scene({
-  id: "my-clip", duration: 14, format: "vertical", style: "sunny", set: "suburb", props: [],
+  id: "my-clip", duration: 14, format: "vertical", style: "sunny", set: "suburb",
   cast: [sedan, sara, mike],
   timeline: [
     at(0, sedan.driveTo([0, 1.8], { duration: 4, ease: "arrive" })),
@@ -61,105 +69,125 @@ export default scene({
 });
 ```
 
-Timing:
-- `at(t, action)` — absolute seconds.
-- `next(action, delay?)` — after the same actor's previous action.
-- `after(actorOrCue, action, delay?)` — after another actor's latest-listed action, or a named cue. Delay can be negative (overlap).
-- `.as("cue")` on any entry names it. Prefer cues over hand-computed times — durations (walks, enter/exit) are computed.
-- Each actor's own actions must be listed in time order. Cars/people are planned in listed order; **camera and
-  captions are planned last**, so they can wait on any cue. If you list an action after something that already used
-  that actor's position, compile fails with "Move it earlier in the timeline".
+### Timing
 
-People: `walkTo(target, {facing?})`, `runTo`, `turnTo(target|deg)`, `face(other)`, `play(clip)`, `say(text)`,
-`enter(car, seat)` (auto-walks to the door, routes around cars), `exit()`, `spot("front"|"behind"|"left"|"right", dist)`.
-Gesture clips layer on top of walking/sitting (wave while walking, wave from a car). Body clips need the person standing.
-Walks automatically route around parked cars.
+- `at(t, action)` absolute seconds · `next(action, delay?)` after the same actor's previous action ·
+  `after(actorOrCue, action, delay?)` after another actor's latest-listed action or a named cue (delay may be negative).
+- `.as("cue")` names any entry. **Prefer cues over hand-computed times** — walks, enter/exit and voice lines have
+  computed durations.
+- Cars and people are planned in listed order; **camera, captions and sound cues are planned last**, so they can
+  wait on any cue.
+- Per actor, **body actions** (walks, body clips, enter/exit, drives, crashes, tase, yank) must be listed in time
+  order. Layered actions (say, feel, gesture clips, honk, siren, door) can be listed anywhere.
+- If an action is listed after something that already depended on that actor's position, compile fails with
+  "Move it earlier in the timeline".
 
-Cars: `driveTo(target, {duration|speed, ease, facing, reverse})`, `driveThrough(points, …)` (smooth curve),
-`hop({height})`, `openDoor/closeDoor(seat)`, `door(seat)` (anchor where a person stands), `spot(...)`,
-`honk({times, duration, word})`, `crashInto(carOrPoint, {brake, impactSpeed})`, `dashcam: true` on the car.
-- **Speed-continuous driving** (highways, passing, brake checks): `driveTo(x, {fromSpeed: 22, endSpeed: 31})` —
-  constant acceleration between the two speeds, duration computed. `fromSpeed` defaults to the current speed,
-  so chained drives never stop in between. Use `fromSpeed` on the first drive to start the scene moving.
-  A long cruise (`driveTo([600, z], {fromSpeed: 22, endSpeed: 22})`) gets cut cleanly by a later drive/crash.
-- **Crashes**: `crashInto` continues from the current speed (braking at `brake` m/s² if given) and simulates
-  forward to the exact contact moment — the target may be moving/braking. Then: striker bounces back, victim is
-  shoved (and slightly spun) by the closing speed, impact burst + debris (stays on the road) + smoke,
-  "CRASH!" word, camera shake, crash sound. Camera smoothing never looks across an impact, so hits land hard.
-`path.arc(center, radius, fromDeg, toDeg, steps)` gives points for donuts/U-turns.
-Eases: `cruise` (start+stop, default), `arrive` (enter moving, brake to stop), `depart` (start from stop, leave moving),
-`smooth`, `linear`, `in`, `out`. A car entering the frame should use `arrive`; leaving the frame, `depart` with the drive
-ending at/after the scene end.
+### People
 
-Camera: `camera.follow(target, preset, {blend, offset, local, smooth})`, `camera.still(pos, lookAt, {blend})`
-(lookAt can be an actor — it pans to track it), `camera.orbit(target, {radius, height, fromDeg, toDeg, duration})`,
-`camera.moveTo(pos, lookAt, {duration, ease})`, `camera.shake({intensity, duration})`.
-Follow cameras use look-ahead smoothing (no lag). Hard cuts are fine and often better than long whips;
-the smoothness check flags blends that move the camera too far too fast.
+`walkTo(target, {facing?, speed?})`, `runTo`, `turnTo(target|deg)`, `face(other)`, `play(clip)`, `say(text)`,
+`feel(mood)`, `enter(car, seat)` (walks to the door first), `exit()`, `spot("front"|"behind"|"left"|"right", dist)`,
+`tase(person)`, `yankDashcam(car)`.
+- Walks route around parked cars on smooth curves.
+- Gesture clips layer on top of walking/sitting (wave while walking, wave from a car). Body clips need the person standing.
+- Holding clips (`tased`) keep their end pose until the next body action, which blends out of it (`play("get-up")`).
+- Moods: neutral, happy, angry (V brows, red flush, shouting), scared (wide eyes, sweat, trembling), shocked, smug,
+  sad, pain (wince), dazed (eyes shut). Blend over 0.25s. Bubbles go red/shaky when angry, wobbly when scared.
+- Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call,
+  yell, arms-crossed, hold-neck, shove, cuffed, hands-up. Body: jump, dance, sit-ground, fall-over, cower, stagger,
+  reach-in, tased, get-up. (`npm run catalog` is the source of truth.)
 
-Overlays: `caption(text, {position: top|center|bottom, size: title|normal, duration})`, speech bubbles via `say`
-(use `\n` for line breaks). Bubbles turn red/shaking when the speaker is angry, wobbly when scared.
+### Cars
 
-Voices (`src/voice/`, `scripts/voices.ts`): each `say()` line is recorded once by a realistic AI voice and keyed
-by hash(voice, mood, text) — changing any of those records a new take. The mood at the line's start sets the
-delivery (ElevenLabs v3 tags: angry → [angry]/[shouting], scared → [nervous] [scared], smug → [confident]…);
-put tags in the text yourself for more direction: `say("[whispers] don't look now")` (tags never show in bubbles).
-Don't pass `duration` to `say()` — let the recording set it. Mouths lip-sync to the recording's loudness.
-Default voices per character model are in `src/voice/voices.ts`; override with `character(..., { voice: "<id>" })`.
-`npm run voices -- --list` shows the account's voices. Switching provider → `--force` to re-record.
+`driveTo(target, {duration|speed, ease, facing, reverse, fromSpeed, endSpeed})`, `driveThrough(points, …)`,
+`hop({height})`, `honk({times, duration, word})`, `crashInto(carOrPoint, {brake, impactSpeed})`, `siren(on, {sound})`,
+`openDoor/closeDoor(seat)`, `door(seat)` (where a person stands), `spot(...)`. Car option `dashcam: true`.
+- **Speed-continuous driving** (highways, passing, brake checks): `{fromSpeed, endSpeed}` gives constant
+  acceleration between them; `fromSpeed` defaults to the current speed, so chained drives never stop in between.
+  A long cruise (`driveTo([600, z], {fromSpeed: 22, endSpeed: 22})`) is cut cleanly by a later drive or crash.
+  A parked car can "enter" at speed with an explicit `fromSpeed` (start it out of shot).
+- **Eases** (when not using speeds): `cruise` (start + stop, default), `arrive` (enter moving, brake to stop),
+  `depart` (start from stop, leave moving — end it at/after the scene end), `smooth`, `linear`, `in`, `out`.
+- **Crashes**: `crashInto` keeps the current speed (braking at `brake` m/s²) and simulates to the exact contact
+  moment — the target may be moving. Then: striker bounces back, victim is shoved and spun, burst + debris + smoke,
+  "CRASH!", camera shake, crash sound.
+- `police` model: light bar + siren. `siren(true)` lights + wail, `siren(true, { sound: false })` lights only.
+- `path.arc(center, radius, fromDeg, toDeg, steps)` gives points for donuts / U-turns.
 
-Police & drama: `police` car model (black & white, light bar) — `siren(true)` lights + wail, `siren(true, {sound:false})`
-lights only. Officers: `officer`, `officer-woman`. `cop.tase(person)` → wires + crackle + zap sound, target goes rigid
-and falls flat (held pose — next body action blends out; use `play("get-up")`). `person.yankDashcam(car)` runs to the
-driver door, opens it, leans in yanking; the dashcam rattles. `camera.replay(car, {from, to})` cuts to that car's
-dashcam footage of an earlier moment (REC overlay, original audio through a "small screen" filter); add a camera
-shot right after it. Clips that `holds` (tased) keep their end pose until the next body action.
-Only body actions (walk, body clips, enter/exit, drives…) need to be listed in time order per actor; say/feel/
-gestures/honk/siren/door can be listed anywhere.
+### Camera
 
-Faces: `person.feel(mood)` — neutral, happy, angry (V brows, red flush, shouting mouth), scared (wide eyes,
-sweat drop, trembling), shocked, smug, sad, pain (wince), dazed (eyes shut). Blends over 0.25s. Pair with clips: `yell`, `hold-neck`, `shove`, `cuffed`,
-`hands-up` (gestures), `cower`, `stagger`, `reach-in`, `tased`, `get-up` (body), `arms-crossed`, `point`, `facepalm`…
+`camera.follow(target, preset, {blend, offset, local, smooth})`, `camera.still(pos, lookAt, {blend})` (lookAt can be
+an actor — it pans with it), `camera.orbit(...)`, `camera.moveTo(...)`, `camera.shake(...)`,
+`camera.replay(car, {from, to})` (that car's dashcam footage of an earlier moment, REC overlay, original audio through
+a small-screen filter — put a shot right after it).
+- Follow cameras use look-ahead smoothing; smoothing never crosses an impact, so hits land hard.
+- Prefer hard cuts over long blends; a blend can also fly the camera through objects. Inspect flags lurches.
 
-Sound (all generated, `src/audio/`): footsteps on every foot plant (heavier when running), engine pitch/volume from
-speed (idle if someone's inside), tire rumble, squeal on hard braking (> ~4.5 m/s²), door open/slam on enter/exit,
-boing + thud for hops, thuds for jump/fall clips, claps, honks, crashes, plus ambience (birds / city hum / highway
-roar / night crickets). Panned and attenuated relative to the camera. `sound(name, {at, volume})` drops a one-off
-(crash, honk, boing, thud, whoosh, door-slam, pop, screech). Scene option `sound: { enabled, ambience, volume }`.
+### Overlays & sound
+
+- `caption(text, {position, size, duration})`; `say()` bubbles (`\n` for line breaks).
+- Sound is generated from the animation (`src/audio/`): footsteps on each foot plant, engine pitch from speed (idle
+  when occupied), tire rumble, squeal on hard braking, doors, hops, honks, crashes, siren, taser, dashcam rattle,
+  ambience per set. Panned and attenuated relative to the camera. `sound(name, {at, volume})` adds a one-off.
+  Scene option `sound: { enabled, ambience, voices, volume }`.
+
+### Voices
+
+- `say()` lines are recorded once (ElevenLabs preferred, Google Chirp 3 HD fallback) and keyed by
+  hash(voice, mood, text): changing any of them records a new take. Recordings go in `voices/` + `voices/manifest.ts`
+  — **commit them** so re-renders are free and offline.
+- Keys: `ELEVENLABS_API_KEY` / `GOOGLE_TTS_API_KEY` from the shell or `.env.local` (git-ignored — never commit keys,
+  never print them). `ANIMO_VOICE_PROVIDER` picks when both exist.
+- Mood at the line's start sets the delivery (v3 tags: angry → [angry]/[shouting], scared → [nervous]…). Direct further
+  with tags in the text: `say("[whispers] don't look now")` — tags never show in bubbles.
+- Don't pass `duration` to `say()`; the recording sets it. Mouths lip-sync to the recording's loudness.
+- Default voices per character model: `src/voice/voices.ts` (ElevenLabs ids are from the public premade list,
+  unverified on the user's account — check with `npm run voices -- --list`). Override per character with `voice`.
+- In the cloud container ElevenLabs is blocked by the network policy; the user renders voices locally.
 
 ## Framing tips (learned the hard way)
 
-- Vertical (default, 1080×1920) frames are narrow: ~37° horizontal. To fit a 12m-wide area you need ~25m distance.
-- Keep the speaker visible when they `say` something. Close-ups: `follow(person, "close")` (3/4) or `"close-front"`.
-- Don't put the camera where a set prop is (inspect warns). Mailboxes/lamps in the foreground look bad even when not "blocking".
-- Avoid two people lined up from the camera's view (one hides the other) — shoot from the side.
-- Chase cams whip around during tight turns — cut to a wide/orbit shot before donuts or U-turns.
+- Vertical (1080×1920) frames are narrow: ~37° horizontal. Fitting a 12m-wide area needs ~25m distance.
+- Keep the speaker in frame when they talk; for a reply, an over-the-shoulder shot keeps both lines on screen
+  (off-screen speakers get their bubble pinned to the frame edge).
+- Avoid two people lined up from the camera (one hides the other) — shoot from the side.
+- Mailboxes/lamps/trees right in front of the lens look bad even when inspect doesn't call them "blocking".
+- Chase cams whip around in tight turns — cut to a wide/orbit shot before donuts or U-turns.
+- Interior / dashcam shots: the filming car's cabin is hidden automatically during `camera.replay`.
 
 ## Code map
 
-- `src/engine/` pure, deterministic logic (no React): `spec.ts` (Zod schema), `dsl.ts`, `compile.ts` (timeline → tracks,
-  warnings, jolt check), `carTrack.ts` (paths, wheel spin, steering, suspension springs, hops, doors),
-  `characterTrack.ts` (walk/turn/clips/enter/exit/ride), `pose.ts` (rig pose, gait, clip library),
-  `cameraTrack.ts` (shots, blends, smoothing), `route.ts` (walk-around-cars pathfinding), `path.ts`, `easing.ts`.
-- `src/catalog/` characters, cars (seat/door layout), sets (+ prop bounds).
-- `src/render/` R3F components: `SceneVideo.tsx` (composition), `CharacterModel.tsx`, `CarModel.tsx`, `World.tsx`,
-  `Props.tsx`, `Overlays.tsx`, `toon.tsx` (toon shading + outlines + geometry cache), `styles.ts`.
-- `scripts/` CLI: `inspect`, `stills`, `render`, `catalog`. `tests/` vitest.
+- `src/engine/` pure, deterministic logic (no React):
+  `spec.ts` (Zod schema), `dsl.ts` (scene helpers), `compile.ts` (timeline → tracks, crashes, warnings, jolt check,
+  replay-aware frame evaluation), `carTrack.ts` (paths, speed ramps, wheels, steering, suspension, hops, doors,
+  impacts, siren, dashcam tug), `characterTrack.ts` (walk/turn/clips/enter/exit/ride, held poses, speech, moods),
+  `pose.ts` (rig, gait, clip library), `expression.ts` (moods → face), `cameraTrack.ts` (shots, blends, smoothing,
+  replay), `route.ts` (walk-around-cars pathfinding), `path.ts`, `easing.ts`, `math.ts`.
+- `src/catalog/` characters, cars (seat/door layout), sets (+ prop bounds for camera checks).
+- `src/render/` R3F: `SceneVideo.tsx` (composition + audio), `CharacterModel.tsx` (rig + face), `CarModel.tsx`,
+  `World.tsx` (sky, lights, sets), `Forest.tsx` (instanced trees), `Props.tsx`, `CrashEffect.tsx`, `ZapEffect.tsx`,
+  `Overlays.tsx` (captions, bubbles, comic words, dashcam overlay, debug HUD), `toon.tsx` (toon shading, outlines,
+  geometry cache), `styles.ts`.
+- `src/audio/` `dsp.ts` (noise, filters, mix bus, WAV), `sounds.ts` (one-shot recipes), `soundtrack.ts` (derives
+  every sound from the compiled scene). `src/voice/` line keys, delivery tags, default voices.
+- `scripts/` CLI: `catalog`, `inspect`, `stills`, `sound`, `voices`, `render` (+ `lib.ts`: scene lookup, args,
+  `.env.local` loading). `tests/` vitest. `voices/` recorded lines + manifest.
 
 Everything is a pure function of time — frames render in parallel and identically every time. Never use
-`Math.random()` or wall-clock time in the engine or models; use `wobble(t, seed)` from `math.ts`.
+`Math.random()` or wall-clock time in the engine, models or audio; use seeded helpers (`wobble`, `Rng`).
 
-Adding things:
-- New clip: add to `CLIPS` in `pose.ts` (pose function of time; gestures only touch upper-body keys).
-- New character: add to `CHARACTERS` (all share one rig).
-- New car: add to `CARS` (seats/doors derive from the shape).
-- New prop: `PROP_TYPES` in `spec.ts`, render in `Props.tsx`, bounds in `sets.ts`.
-- New sound: recipe in `src/audio/sounds.ts` (pure function → mono buffer), trigger it in `soundtrack.ts`.
-  Oscillators with changing pitch must accumulate phase (see `Squeal`) — `sin(f(t)·t)` smears into noise.
-- New mood: add to `MOODS` in `expression.ts`.
+### Adding things
 
-Gotcha: never build one giant mesh hundreds of meters long (rails, curbs) — it rendered a line across faces.
-Use `LongBox` in `World.tsx` (40m sections).
+- Clip: `CLIPS` in `pose.ts` (pose as a function of time; gestures only touch upper-body keys; `holds` for end poses).
+- Mood: `MOODS` in `expression.ts` (+ delivery tag in `voice/lines.ts`, speaking rate in `scripts/voices.ts`).
+- Character: `CHARACTERS` (all share one rig) + default voices in `voice/voices.ts` (the types force both).
+- Car: `CARS` (seats/doors derive from the shape).
+- Prop: `PROP_TYPES` in `spec.ts`, render in `Props.tsx`, bounds in `sets.ts`. Trees by the hundred → `Forest.tsx`.
+- Sound: recipe in `src/audio/sounds.ts`, trigger in `soundtrack.ts`.
 
-Gotcha: never export a function named `then` from a module — the module becomes a "thenable" and `await import()` hangs.
-That's why the sequencing helper is `next`.
+### Gotchas
+
+- Oscillators with changing pitch must accumulate phase (`Squeal`, `Siren`) — `sin(f(t)·t)` smears into noise.
+- Crash/impact sounds: noise-based only — sustained sine partials read as a bell.
+- Never build one mesh hundreds of meters long (rails, curbs) — it drew a line across faces. Use `LongBox` (40m sections).
+- Never export a function named `then` — the module becomes a thenable and `await import()` hangs (hence `next`).
+- Instanced meshes need `frustumCulled={false}` or correct bounds (see `Forest.tsx`).
