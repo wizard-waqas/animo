@@ -177,7 +177,7 @@ export default scene({
 - Holding clips (`tased`) keep their end pose until the next body action, which blends out of it (`play("get-up")`).
 - Moods: neutral, happy, angry (V brows, red flush, shouting), scared (wide eyes, sweat, trembling), shocked, smug,
   sad, pain (wince), dazed (eyes shut). Blend over 0.25s. Bubbles go red/shaky when angry, wobbly when scared.
-- Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call,
+- Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call, film,
   yell, arms-crossed, hold-neck, shove, cuffed, hands-up. Body: jump, dance, sit-ground, fall-over, cower, stagger,
   reach-in, tased, get-up. (`npm run catalog` is the source of truth.)
 

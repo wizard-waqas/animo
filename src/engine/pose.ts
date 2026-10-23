@@ -139,6 +139,8 @@ export interface ClipDefinition {
   pose: (time: number, duration: number) => Pose;
   /** Body clips that end in a new resting pose (lying down…) keep it until the next body action. */
   holds?: boolean;
+  /** Something shown in the right hand while the clip plays. */
+  item?: "phone";
 }
 
 /** Lying flat on the back: hips on the ground, torso tipped back, legs out straight. */
@@ -202,8 +204,16 @@ export const CLIPS = {
     pose: (t, d) => withPose({ headY: 0.75 * Math.sin((TAU * t) / d) }),
   },
   "phone-call": {
-    layer: "gesture", defaultDuration: 2.5, description: "Holds a phone to the ear",
+    layer: "gesture", defaultDuration: 2.5, description: "Holds a phone to the ear", item: "phone",
     pose: (t) => withPose({ rShoulderX: 0.35, rShoulderZ: 0.35, rElbow: 2.55, headZ: -0.15 + 0.03 * wave(t, 0.8) }),
+  },
+  film: {
+    layer: "gesture", defaultDuration: 4, description: "Films on a phone held up in the right hand, turned to the right", item: "phone",
+    pose: (t) => withPose({
+      spineY: -0.3, headY: -0.55, headX: 0.04,
+      rShoulderX: 1.45, rShoulderZ: 0.65, rElbow: 0.95 + 0.03 * wave(t, 0.7),
+      lShoulderX: 0.5, lElbow: 1.2,
+    }),
   },
   yell: {
     layer: "gesture", defaultDuration: 2, description: "Angry yelling: leans in, arms jabbing forward",

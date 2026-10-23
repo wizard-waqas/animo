@@ -31,7 +31,7 @@ export const CharacterModel = ({ look, state, time, talk, seed }: CharacterModel
         <group rotation={[pose.spineX, pose.spineY, pose.spineZ]}>
           <Torso look={look} />
           <Arm side={1} shoulderX={pose.lShoulderX} shoulderZ={pose.lShoulderZ} elbow={pose.lElbow} look={look} />
-          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} />
+          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} phone={state.item === "phone"} />
           <Part geometry={shapes.cylinder(0.07, 0.08, 0.14)} color={look.skin} position={[0, 0.58, 0]} outline={false} />
           <group position={[0, RIG.headHeight, 0]} rotation={[pose.headX, pose.headY, pose.headZ]}>
             <Head look={look} time={time} talk={talk} seed={seed} face={state.face ?? MOODS.neutral} />
@@ -52,13 +52,23 @@ const Leg = ({ side, hip, knee, look }: { side: 1 | -1; hip: number; knee: numbe
   </group>
 );
 
-const Arm = ({ side, shoulderX, shoulderZ, elbow, look }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook }) => (
+const Arm = ({ side, shoulderX, shoulderZ, elbow, look, phone = false }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; phone?: boolean }) => (
   <group position={[side * RIG.shoulderSpacing * look.build, RIG.shoulderHeight - 0.03, 0]} rotation={[-shoulderX, 0, side * shoulderZ]}>
     <Part geometry={shapes.limb(0.068, RIG.upperArm)} color={look.shirt} />
     <group position={[0, -RIG.upperArm + 0.02, 0]} rotation={[-elbow, 0, 0]}>
       <Part geometry={shapes.limb(0.06, RIG.lowerArm)} color={look.skin} />
       <Part geometry={shapes.sphere(0.075)} color={look.skin} position={[0, -RIG.lowerArm, 0]} />
+      {phone && <Phone />}
     </group>
+  </group>
+);
+
+/** Phone gripped in the hand: long side along the forearm, glowing screen toward the palm side (+Z when the arm hangs). */
+const Phone = () => (
+  <group position={[0, -RIG.lowerArm - 0.06, 0.02]}>
+    <Part geometry={shapes.box(0.1, 0.19, 0.02, 0.014)} color="#1b1b1b" outline={0.008} />
+    <Part geometry={shapes.box(0.084, 0.165, 0.004, 0.004)} color="#bfe3ff" emissive="#7fb8ff" position={[0, 0, 0.012]} outline={false} shadow={false} />
+    <Part geometry={shapes.sphere(0.012)} color="#555555" position={[0.026, 0.065, -0.012]} outline={false} shadow={false} />
   </group>
 );
 
