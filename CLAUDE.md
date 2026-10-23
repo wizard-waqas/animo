@@ -16,25 +16,32 @@ sets, sound effects — built in code. No model or audio asset files. Only voice
 ## The loop (always follow it)
 
 1. `npm run catalog` — what exists (characters, cars, clips, moods, sounds, camera presets, sets, styles).
-2. Write `scenes/<id>.scene.ts`, register it in `scenes/index.ts`.
-3. `npm run inspect -- <id>` — resolved timeline, positions, **warnings** and **smoothness**. Fix every warning
-   before rendering. It catches: walking through cars, cars overlapping, cars moving while someone gets in, props
-   blocking the camera, cars stopping dead/starting instantly, actions running past the end, camera lurches, hitches.
-   Inspect can't judge framing — that's step 4.
-4. `npm run stills -- <id> --at 2,4.5,8` — contact sheet at `out/<id>/sheet.png` with debug tags (names, coords,
-   time, grid); `--clean` for none. **Read the PNG.** Check: is the subject in frame, is the speaker visible when
-   they talk, is anyone hidden behind someone/something, does the camera pass through objects.
-5. `npm run sound -- <id> --spectrogram` — prints every sound event and writes `out/<id>/sound.png`. That's how to
-   "listen": events line up, no unintended broadband noise or sustained tones.
-6. `npm run voices -- <id>` — records `say()` lines with a realistic AI voice (render does this automatically).
-   After recording, re-run inspect: line lengths come from the recordings, so cue timings shift.
-7. `npm run render -- <id> --preview` (30fps, half size) → `npm run render -- <id>` final.
+2. Write `scenes/<id>.scene.ts` with `export default scene({ id: "<id>", … })`. The filename is the registration:
+   there is no list to add it to.
+3. `npm run preflight -- <id> --at 2,4.5,8` — one command, one pass: resolved timeline, positions, **warnings** and
+   **smoothness**; every sound event + `out/<id>/sound.png`; contact sheet `out/<id>/sheet.png` with debug tags
+   (`--clean` for none). Exits 1 while anything needs fixing. Fix every warning before rendering. It catches:
+   walking through cars, cars overlapping, cars moving while someone gets in, props blocking the camera, cars
+   stopping dead/starting instantly, actions running past the end, camera lurches, hitches.
+   Preflight can't judge framing — **read the sheet PNG.** Check: is the subject in frame, is the speaker visible when
+   they talk, is anyone hidden behind someone/something, does the camera pass through objects. The spectrogram is how
+   to "listen": events line up, no unintended broadband noise or sustained tones.
+   (`inspect`, `stills`, `sound` still exist for one piece at a time.)
+4. `npm run voices -- <id>` — records `say()` lines with a realistic AI voice (render does this automatically).
+   After recording, re-run preflight: line lengths come from the recordings, so cue timings shift. Unrecorded lines
+   are listed as a to-do, not counted as a problem.
+5. `npm run render -- <id> --preview` (30fps, half size, no shadows) → `npm run render -- <id>` final.
    `--scale 0.75` (810×1440) is a good phone-sized final; the scale must give whole pixels.
    `--from`/`--to` (seconds or a cue name) render one slice of a long clip.
-8. `npm run check` (typecheck + tests) after engine changes. Commit and push.
+6. `npm run check` (typecheck + tests) after engine changes. Commit and push.
 
-Rendering speed: the cloud container has no GPU (software WebGL, 4 cores) — a 60s 60fps clip took ~50 min.
-Iterate with stills; render once. The user can render locally much faster.
+Rendering speed: the cloud container has no GPU (software WebGL, 4 cores). The render bundle is cached in
+`out/.bundle/` and only rebuilds when `src/` changes; scenes and recordings travel as inputProps, so a scene edit
+costs nothing. Every command opens one browser. Soundtracks are cached by content. What still costs: pixels. On
+software WebGL the shadow pass is bigger than the frame itself, so previews skip it; more browser tabs don't help
+(SwiftShader already uses every core). Measured on `pickup-friend` (14 s, 420 preview frames): preview render
+108 s → 46 s; three stills 8.8 s → 1.8–4 s. Scenes default to 30fps (what phones play); ask for `fps: 60` only when a
+clip needs it. Iterate with preflight; render once. The user can render locally much faster.
 
 ## World conventions
 
@@ -143,7 +150,9 @@ a small-screen filter — put a shot right after it).
 - Don't pass `duration` to `say()`; the recording sets it. Mouths lip-sync to the recording's loudness.
 - Default voices per character model: `src/voice/voices.ts` (ElevenLabs ids are from the public premade list,
   unverified on the user's account — check with `npm run voices -- --list`). Override per character with `voice`.
-- In the cloud container ElevenLabs is blocked by the network policy; the user renders voices locally.
+- Lines record `ANIMO_VOICE_CONCURRENCY` at a time (default 2; ElevenLabs free/starter allow 2–3, Creator/Pro more).
+- In the cloud container ElevenLabs is blocked by the network policy unless the user allows `api.elevenlabs.io` in
+  the environment's network settings; otherwise the user records voices locally and commits `voices/`.
 
 ## Framing tips (learned the hard way)
 
@@ -167,11 +176,15 @@ a small-screen filter — put a shot right after it).
 - `src/render/` R3F: `SceneVideo.tsx` (composition + audio), `CharacterModel.tsx` (rig + face), `CarModel.tsx`,
   `World.tsx` (sky, lights, sets), `Forest.tsx` (instanced trees), `Props.tsx`, `CrashEffect.tsx`, `ZapEffect.tsx`,
   `Overlays.tsx` (captions, bubbles, comic words, dashcam overlay, debug HUD), `toon.tsx` (toon shading, outlines,
-  geometry cache), `styles.ts`.
+  geometry cache), `styles.ts`, `metadata.ts` (size/fps per scene). `SceneVideo` takes the scene + its voice clips as
+  props. Entry points: `src/index.ts` → `Root.tsx` (Studio, one composition per `scenes/*.scene.ts` via
+  `require.context`) and `src/entry.render.tsx` (CLI: one composition fed by inputProps, imports no scenes).
 - `src/audio/` `dsp.ts` (noise, filters, mix bus, WAV), `sounds.ts` (one-shot recipes), `soundtrack.ts` (derives
   every sound from the compiled scene). `src/voice/` line keys, delivery tags, default voices.
-- `scripts/` CLI: `catalog`, `inspect`, `stills`, `sound`, `voices`, `render` (+ `lib.ts`: scene lookup, args,
-  `.env.local` loading). `tests/` vitest. `voices/` recorded lines + manifest.
+- `scripts/` CLI: `catalog`, `preflight` (= inspect + sound + stills), `inspect`, `stills`, `sound`, `voices`,
+  `render`. `lib.ts` is the shared plumbing: `.env.local`, scene discovery (`findScene`/`loadScenes`), the bundle
+  cache (`bundleOnce`, keyed by a hash of `src/`), `withBrowser`, `ensureSound` (cached by content), `inputPropsFor`.
+  `tests/` vitest. `voices/` recorded lines + manifest.
 
 Everything is a pure function of time — frames render in parallel and identically every time. Never use
 `Math.random()` or wall-clock time in the engine, models or audio; use seeded helpers (`wobble`, `Rng`).
@@ -191,4 +204,7 @@ Everything is a pure function of time — frames render in parallel and identica
 - Crash/impact sounds: noise-based only — sustained sine partials read as a bell.
 - Never build one mesh hundreds of meters long (rails, curbs) — it drew a line across faces. Use `LongBox` (40m sections).
 - Never export a function named `then` — the module becomes a thenable and `await import()` hangs (hence `next`).
-- Instanced meshes need `frustumCulled={false}` or correct bounds (see `Forest.tsx`).
+- Instanced meshes need correct bounds (`computeBoundingSphere()` after setting matrices, see `Forest.tsx`) or
+  `frustumCulled={false}`; with bounds, a row of trees behind the camera costs nothing.
+- The render bundle must not import scenes or `voices/manifest.ts` (that is what keeps the cache valid). Scene data
+  and clips go through inputProps; `src/voice/lines.ts` holds a registry the CLI/Studio fill from the manifest.

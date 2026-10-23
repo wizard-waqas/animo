@@ -29,7 +29,7 @@ Then run `npm run voices -- <scene>` (render does this automatically). Each line
 
 ```bash
 npm run render -- pickup-friend --preview   # quick: 30fps, half size → out/pickup-friend/preview.mp4
-npm run render -- pickup-friend             # final: 60fps, full size → out/pickup-friend/pickup-friend.mp4
+npm run render -- pickup-friend             # final: 30fps, full size → out/pickup-friend/pickup-friend.mp4
 ```
 
 You can also render from Studio with its Render button.
@@ -40,11 +40,12 @@ You can also render from Studio with its Render button.
 |---|---|
 | `npm run studio` | Live preview in the browser |
 | `npm run catalog` | Lists every character, car, animation, camera preset, set and style |
+| `npm run preflight -- <scene>` | Everything to check before rendering: timeline + warnings, soundtrack + spectrogram, contact sheet |
 | `npm run inspect -- <scene>` | Timeline, positions and problem warnings (no rendering) |
 | `npm run stills -- <scene>` | Contact sheet of frames → `out/<scene>/sheet.png` |
 | `npm run voices -- <scene>` | Records the dialogue with an AI voice (needs an API key) |
 | `npm run sound -- <scene>` | Builds the soundtrack (render does this automatically) |
-| `npm run render -- <scene>` | Renders the MP4 with sound |
+| `npm run render -- <scene>` | Renders the MP4 with sound (`--preview` for a quick look) |
 | `npm run check` | Typecheck + unit tests |
 
 ## Scenes included
@@ -60,10 +61,11 @@ from the animation, so they always line up with what's on screen.
 
 ## How new clips get made
 
-Describe the clip to Claude. Claude writes `scenes/<name>.scene.ts`, runs `inspect` and `stills` to check
-its own work, fixes problems, and renders. See `CLAUDE.md` for the details Claude follows.
+Describe the clip to Claude. Claude writes `scenes/<name>.scene.ts` (the filename is all the registration a scene
+needs), runs `preflight` to check its own work, fixes problems, and renders. See `CLAUDE.md` for the details Claude follows.
 
 ## Notes
 
 - On Linux machines without a GPU, rendering uses software WebGL, which is slower. On a Mac or a PC with a GPU it's much faster.
+- The render bundle is cached in `out/.bundle/` and only rebuilds when `src/` changes; soundtracks are cached in `public/audio/`.
 - Set `TOON_BROWSER=/path/to/chrome` to use a specific Chrome/Chromium for rendering.

@@ -1,14 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { scenes } from "../scenes";
 import { SAMPLE_RATE, decodeWav, encodeMonoWav } from "../src/audio/dsp";
-import { compileScene } from "../src/engine/compile";
+import { type CompiledScene, compileScene } from "../src/engine/compile";
 import type { Mood } from "../src/engine/expression";
-import type { SceneSpec } from "../src/engine/spec";
-import { ENVELOPE_RATE, deliveryTags, encodeEnvelope, stripTags } from "../src/voice/lines";
+import { ENVELOPE_RATE, type VoiceClip, deliveryTags, encodeEnvelope, registerVoiceClips, stripTags } from "../src/voice/lines";
 import { type VoiceProvider, resolveVoice } from "../src/voice/voices";
-import { VOICE_CLIPS, type VoiceClip } from "../voices/manifest";
-import { findScene, parseArgs } from "./lib";
+import { VOICE_CLIPS } from "../voices/manifest";
+import { ROOT, findScene, loadScenes, parseArgs } from "./lib";
 
 /**
  * Record realistic voices for every say() line, once. Results are saved in voices/ (commit them) and
@@ -21,6 +19,8 @@ import { findScene, parseArgs } from "./lib";
  *
  * Provider: ELEVENLABS_API_KEY (best acting, follows [angry]/[whispers] tags) or GOOGLE_TTS_API_KEY
  * (Chirp 3 HD voices). Set ANIMO_VOICE_PROVIDER to choose when both are present.
+ * Lines are recorded ANIMO_VOICE_CONCURRENCY at a time (default 2: ElevenLabs free/starter tiers allow 2–3
+ * concurrent requests; Creator/Pro allow 5–10).
  */
 
 const pickProvider = (): VoiceProvider | undefined => {
@@ -108,54 +108,78 @@ const envelopeOf = (samples: Float32Array) => {
   return encodeEnvelope(levels.map((level) => Math.max(0, (level / loudest - 0.15) / 0.85)));
 };
 
-const writeManifest = (clips: Record<string, VoiceClip>) => {
+const VOICES_DIR = path.join(ROOT, "voices");
+const MANIFEST = path.join(VOICES_DIR, "manifest.ts");
+/** All recorded clips, including ones added during this run (the manifest on disk is rewritten from this). */
+const clips: Record<string, VoiceClip> = { ...VOICE_CLIPS };
+
+const writeManifest = () => {
   const sorted = Object.fromEntries(Object.entries(clips).sort(([a], [b]) => a.localeCompare(b)));
-  const header = readFileSync(path.resolve("voices/manifest.ts"), "utf8").split("export const VOICE_CLIPS")[0];
-  writeFileSync(path.resolve("voices/manifest.ts"), `${header}export const VOICE_CLIPS: Record<string, VoiceClip> = ${JSON.stringify(sorted, null, 2)};\n`);
+  const header = readFileSync(MANIFEST, "utf8").split("export const VOICE_CLIPS")[0];
+  writeFileSync(MANIFEST, `${header}export const VOICE_CLIPS: Record<string, VoiceClip> = ${JSON.stringify(sorted, null, 2)};\n`);
 };
 
-export const recordVoices = async (spec: SceneSpec, options: { force?: boolean } = {}) => {
-  const lines = Object.values(compileScene(spec).characters).flatMap((track) =>
-    track.speech.map((line) => ({ ...line, identity: track.voice, character: track.id })),
-  );
-  const missing = lines.filter((line) => options.force || !line.clip || !existsSync(path.resolve("voices", line.clip.file)));
+export interface RecordingResult {
+  /** Lines that could not be recorded (no key, or the service failed). */
+  pending: number;
+  /** Lines recorded in this run. When > 0, recompile: the engine now knows their real lengths. */
+  recorded: number;
+}
+
+/**
+ * Record every say() line the compiled scene still lacks. Newly recorded clips are registered with the engine
+ * before returning, so a `compileScene` afterwards picks up the real timings.
+ */
+export const recordVoices = async (compiled: CompiledScene, options: { force?: boolean } = {}): Promise<RecordingResult> => {
+  const { spec } = compiled;
+  const lines = Object.values(compiled.characters).flatMap((track) => track.speech.map((line) => ({ ...line, identity: track.voice, character: track.id })));
+  // The same line said twice (same voice, mood, text) is one recording.
+  const missing = [...new Map(lines.filter((line) => options.force || !line.clip || !existsSync(path.join(VOICES_DIR, line.clip.file))).map((line) => [line.key, line])).values()];
   if (missing.length === 0) {
     console.log(`${spec.id}: all ${lines.length} line(s) already recorded.`);
-    return 0;
+    return { pending: 0, recorded: 0 };
   }
   const provider = pickProvider();
   if (!provider) {
     console.log(`${spec.id}: ${missing.length} line(s) need a voice, but no API key is set.`);
     console.log("  Set ELEVENLABS_API_KEY (recommended) or GOOGLE_TTS_API_KEY, then run this again.");
-    return missing.length;
+    return { pending: missing.length, recorded: 0 };
   }
-  const clips: Record<string, VoiceClip> = { ...VOICE_CLIPS };
+  const concurrency = Math.max(1, Number(process.env.ANIMO_VOICE_CONCURRENCY ?? 2));
   let failed = 0;
-  for (const line of missing) {
+  let recorded = 0;
+  let consecutiveFailures = 0;
+  let stopped = false;
+  let next = 0;
+  const recordOne = async (line: (typeof missing)[number]) => {
     const voice = resolveVoice(line.identity, provider);
-    process.stdout.write(`  ${line.character} (${line.mood}): "${line.text.replace(/\n/g, " ")}" … `);
-    let raw: Float32Array;
+    const label = `${line.character} (${line.mood}): "${line.text.replace(/\n/g, " ")}"`;
     try {
-      raw = await synthesize(provider, voice, line.script, line.mood);
+      const samples = tidy(await synthesize(provider, voice, line.script, line.mood));
+      const file = `${line.key}.wav`;
+      writeFileSync(path.join(VOICES_DIR, file), encodeMonoWav(samples));
+      clips[line.key] = { file, duration: Math.round((samples.length / SAMPLE_RATE) * 1000) / 1000, envelope: envelopeOf(samples), provider, voice, text: line.script };
+      consecutiveFailures = 0;
+      recorded++;
+      console.log(`  ${label} … ${clips[line.key].duration}s`);
     } catch (error) {
       failed++;
-      console.log(`FAILED\n    ${explainFailure(provider, error)}`);
-      if (failed >= 2 && failed === missing.indexOf(line) + 1) {
-        console.log("  Stopping: the voice service isn't working. The video will render without voices.");
-        return missing.length;
-      }
-      continue;
+      consecutiveFailures++;
+      console.log(`  ${label} … FAILED\n    ${explainFailure(provider, error)}`);
+      if (consecutiveFailures >= 2) stopped = true;
     }
-    const samples = tidy(raw);
-    const file = `${line.key}.wav`;
-    writeFileSync(path.resolve("voices", file), encodeMonoWav(samples));
-    clips[line.key] = { file, duration: Math.round((samples.length / SAMPLE_RATE) * 1000) / 1000, envelope: envelopeOf(samples), provider, voice, text: line.script };
-    writeManifest(clips);
-    console.log(`${clips[line.key].duration}s`);
+  };
+  const worker = async () => {
+    while (next < missing.length && !stopped) await recordOne(missing[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, missing.length) }, worker));
+  if (recorded > 0) {
+    writeManifest();
+    registerVoiceClips(clips);
   }
-  const recorded = missing.length - failed;
-  console.log(`${spec.id}: recorded ${recorded} line(s) with ${provider}${failed ? `, ${failed} failed` : ""}. Timings now follow the recordings.`);
-  return failed;
+  if (stopped) console.log("  Stopping: the voice service isn't working. The video will render without those voices.");
+  console.log(`${spec.id}: recorded ${recorded} line(s) with ${provider}${failed ? `, ${failed} failed` : ""}${recorded ? ". Timings now follow the recordings." : "."}`);
+  return { pending: missing.length - recorded, recorded };
 };
 
 /** Turn network/API errors into something actionable. */
@@ -190,9 +214,9 @@ if (isMain) {
   const { positional, flags } = parseArgs();
   if (flags.list) await listVoices();
   else {
-    const targets = flags.all ? scenes : [findScene(positional[0])];
+    const targets = flags.all ? await loadScenes() : [await findScene(positional[0])];
     let pending = 0;
-    for (const spec of targets) pending += await recordVoices(spec, { force: Boolean(flags.force) });
+    for (const spec of targets) pending += (await recordVoices(compileScene(spec), { force: Boolean(flags.force) })).pending;
     if (pending > 0) process.exitCode = 1;
   }
 }
