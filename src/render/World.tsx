@@ -12,12 +12,13 @@ import { Part, shapes } from "./toon";
  * Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action.
  * `shadowMap` is the shadow texture size (0 = no shadow pass; on software WebGL that pass costs more than the frame).
  */
-export const World = ({ style, set, props, focus, debug, shadowMap = 2048, time }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean; shadowMap?: number; time: number }) => {
+export const World = ({ style, set, props, focus, debug, shadowMap = 2048, time }: { style: StylePreset; set: SetName; props: (PropSpec & { greenTime?: number })[]; focus: Vec3; debug: boolean; shadowMap?: number; time: number }) => {
   const setProps = useMemo(() => [...SET_PROPS[set], ...props], [set, props]);
   return (
     <>
       <fog attach="fog" args={[style.skyHorizon, style.fogNear, style.fogFar]} />
       <Sky style={style} />
+      {style.sunDisc && <SunDisc disc={style.sunDisc} />}
       {style.clouds && <Clouds />}
       <hemisphereLight args={[style.ambientSky, style.ambientGround, style.ambientIntensity]} />
       <Sun style={style} focus={focus} shadowMap={shadowMap} />
@@ -62,6 +63,31 @@ const Sky = ({ style }: { style: StylePreset }) => {
     <mesh material={material} renderOrder={-1}>
       <sphereGeometry args={[400, 32, 16]} />
     </mesh>
+  );
+};
+
+/** Big low sun on the horizon (sunset): drawn just inside the sky dome, without fog, behind everything. */
+const SunDisc = ({ disc }: { disc: NonNullable<StylePreset["sunDisc"]> }) => {
+  const [x, y, z] = disc.direction;
+  const length = Math.hypot(x, y, z);
+  const distance = 380;
+  const position: Vec3 = [(x / length) * distance, (y / length) * distance, (z / length) * distance];
+  // Face the middle of the world (circles face +Z).
+  const rotation = useMemo(() => {
+    const pivot = new THREE.Object3D();
+    pivot.position.set(...position);
+    pivot.lookAt(0, 0, 0);
+    return pivot.rotation.clone();
+  }, [x, y, z]);
+  return (
+    <group position={position} rotation={rotation}>
+      {[{ radius: 34, color: disc.glow, opacity: 0.22 }, { radius: 22, color: disc.glow, opacity: 0.4 }, { radius: 14, color: disc.color, opacity: 1 }].map((ring) => (
+        <mesh key={ring.radius} renderOrder={-1}>
+          <circleGeometry args={[ring.radius, 48]} />
+          <meshBasicMaterial color={ring.color} transparent opacity={ring.opacity} fog={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
   );
 };
 

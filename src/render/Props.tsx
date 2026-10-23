@@ -1,15 +1,18 @@
 import type { PropSpec } from "../engine/spec";
+
+/** Scene props carry their resolved traffic-light switch time. */
+type PlacedProp = PropSpec & { greenTime?: number };
 import { DEG } from "../engine/math";
 import { Part, shapes } from "./toon";
 
 /** Set dressing. Everything sits at `at` (on the ground, or at height `y`) and faces +Z at facing 0. */
-export const Prop = ({ prop, night, time = 0 }: { prop: PropSpec; night: boolean; time?: number }) => (
+export const Prop = ({ prop, night, time = 0 }: { prop: PlacedProp; night: boolean; time?: number }) => (
   <group position={[prop.at[0], prop.y ?? 0, prop.at[1]]} rotation={[0, prop.facing * DEG, 0]} scale={prop.scale}>
     <PropBody prop={prop} night={night} time={time} />
   </group>
 );
 
-const PropBody = ({ prop, night, time }: { prop: PropSpec; night: boolean; time: number }) => {
+const PropBody = ({ prop, night, time }: { prop: PlacedProp; night: boolean; time: number }) => {
   switch (prop.type) {
     case "tree":
       return (
@@ -164,6 +167,37 @@ const PropBody = ({ prop, night, time }: { prop: PropSpec; night: boolean; time:
           <Part geometry={shapes.box(6.4, 0.14, 3.3, 0.04)} color="#9a3b3b" position={[0, 2.66, 0.05]} rotation={[0.12, 0, 0]} />
         </>
       );
+    case "traffic-light": {
+      // Pole on the shoulder, arm reaching 7.8m along local -X with a signal head over each lane (lamps facing +Z),
+      // and a stop line painted 1.5m in front. Red until greenTime, then green.
+      const green = prop.greenTime !== undefined && time >= prop.greenTime;
+      const lamps = [
+        { y: 0.34, on: !green, lit: "#ff2d2d", off: "#5a1414" },
+        { y: 0, on: false, lit: "#ffd23f", off: "#5a4a14" },
+        { y: -0.34, on: green, lit: "#3ddc84", off: "#123d24" },
+      ];
+      return (
+        <>
+          <Part geometry={shapes.cylinder(0.13, 0.17, 6.2, 12)} color="#3d4150" position={[0, 3.1, 0]} />
+          <Part geometry={shapes.box(7.9, 0.16, 0.16, 0.05)} color="#3d4150" position={[-3.95, 5.95, 0]} />
+          {[-3.8, -7.4].map((x) => (
+            <group key={x} position={[x, 5.2, 0]}>
+              <Part geometry={shapes.box(0.05, 0.6, 0.05, 0.01)} color="#3d4150" position={[0, 0.5, 0]} outline={false} />
+              <Part geometry={shapes.box(0.46, 1.12, 0.32, 0.08)} color="#1d1b26" />
+              {lamps.map((lamp) => (
+                <group key={lamp.y} position={[0, lamp.y, 0.16]}>
+                  <Part geometry={shapes.sphere(0.13)} color={lamp.on ? lamp.lit : lamp.off} emissive={lamp.on ? lamp.lit : undefined} scale={[1, 1, 0.45]} outline={false} shadow={false} />
+                  <Part geometry={shapes.box(0.34, 0.04, 0.18, 0.01)} color="#1d1b26" position={[0, 0.15, 0.07]} outline={false} />
+                </group>
+              ))}
+              {/* A glow halo so the lit lamp reads from far away. */}
+              <Part geometry={shapes.sphere(0.22)} color={green ? "#3ddc84" : "#ff2d2d"} emissive={green ? "#3ddc84" : "#ff2d2d"} opacity={0.3} position={[0, green ? -0.34 : 0.34, 0.2]} scale={[1, 1, 0.3]} outline={false} shadow={false} />
+            </group>
+          ))}
+          <Part geometry={shapes.plane(8.6, 0.45)} color="#f8f9fa" position={[-4.7, 0.065 - (prop.y ?? 0), 1.5]} outline={false} shadow={false} />
+        </>
+      );
+    }
     case "mailbox":
       return (
         <>

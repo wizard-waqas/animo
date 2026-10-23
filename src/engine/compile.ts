@@ -19,8 +19,8 @@ export interface Crash { time: number; point: Vec3; speed: number; direction: Ve
 export interface Word { text: string; start: number; end: number; actor?: string; point?: Vec3; style: "crash" | "honk" | "splat" }
 /** A clump of mud in flight: thrown at `start` from `from` with velocity `velocity`, lands at `end`. */
 export interface MudBlob { start: number; end: number; from: Vec3; velocity: Vec3; size: number }
-/** A prop with its appearance time resolved. */
-export type ScenePropSpec = PropSpec & { fromTime?: number };
+/** A prop with its appearance (and traffic-light green) times resolved. */
+export type ScenePropSpec = PropSpec & { fromTime?: number; greenTime?: number };
 /** A taser shot: wires from the officer's hand to the target; crackling electricity while `zapEnd` hasn't passed. */
 export interface Zap { start: number; zapEnd: number; wiresEnd: number; officer: string; target: string }
 
@@ -473,13 +473,22 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     if (end > spec.duration + 1e-6 && entry.action.type !== "drive") warnings.push(`${actor}: "${label}" ends at ${fmt(end)}s, after the scene ends (${spec.duration}s)`);
   }
 
-  for (const car of Object.values(cars)) car.finalize(spec.duration);
-  const props: ScenePropSpec[] = spec.props.map((prop) => {
-    if (prop.from === undefined || typeof prop.from === "number") return { ...prop, fromTime: prop.from };
-    const cue = cues[prop.from.cue];
-    if (!cue) throw new Error(`A ${prop.type} prop appears from cue "${prop.from.cue}", which isn't in the timeline`);
-    return { ...prop, fromTime: cue.end + prop.from.delay };
-  });
+  for (const [id, car] of Object.entries(cars)) {
+    car.driverIn = (t) => Object.values(characters).some((person) => {
+      const seat = person.seatedIn(t);
+      return seat?.car === id && seat.seat === "driver";
+    });
+    car.finalize(spec.duration);
+  }
+  const resolveWhen = (prop: PropSpec, when: PropSpec["from"], what: string) => {
+    if (when === undefined || typeof when === "number") return when;
+    const cue = cues[when.cue];
+    if (!cue) throw new Error(`A ${prop.type} prop ${what} cue "${when.cue}", which isn't in the timeline`);
+    return cue.end + when.delay;
+  };
+  const props: ScenePropSpec[] = spec.props.map((prop) => ({
+    ...prop, fromTime: resolveWhen(prop, prop.from, "appears from"), greenTime: resolveWhen(prop, prop.green, "turns green at"),
+  }));
   const setAt = (t: number) => locationAt(locations, t);
   if (!camera.hasShotAt(0)) warnings.push("No camera shot at t=0 — using the default wide shot until the first camera action.");
   warnings.push(...findBlockedShots(spec, camera, props, setAt));

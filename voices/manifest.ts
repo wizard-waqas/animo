@@ -11,6 +11,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "NOOO!\nMy car!!"
   },
+  "111b3f40": {
+    "file": "111b3f40.wav",
+    "duration": 2.313,
+    "envelope": "00nZXZXWTByqmwpDQSIFDCzzxwzAvjjpCCzyBEEye00inmiENAuvxAxgaacfefb89vAAADAxvuxBzxuspprrqlhb7100000iAHKIKJLNKJDDCDGGEAkfghuAxtpqonk830000000008",
+    "provider": "elevenlabs",
+    "voice": "nPczCjzI2devNBz1zQrb",
+    "text": "You're driving too slow,\nMOVE IT!"
+  },
   "25580a13": {
     "file": "25580a13.wav",
     "duration": 0.882,
@@ -18,6 +26,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "provider": "elevenlabs",
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "Aah."
+  },
+  "558468f0": {
+    "file": "558468f0.wav",
+    "duration": 3.301,
+    "envelope": "0c7DMTTUWWWOuNSRPNtb7vNRTMINJrmcawLJLNKGIKFyjmhjnc0b98awCCzACFEBCEEs0mh87iBFACCGFHHzpg600CZVMKIILPUWXURFwpnhha003yCBAAyspjgeg9000000028gCEEFGECFMMyqiipNZQICBBEGBslnyLHGGHGCyBAzAzyADFFFFEEFECAzACELVYr",
+    "provider": "elevenlabs",
+    "voice": "cgSgspJ2msm6clMCkdW9",
+    "text": "Glad I got a dashcam to embarrass\nthese fooligans online."
   },
   "5bfc22a9": {
     "file": "5bfc22a9.wav",
@@ -35,6 +51,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "EXAVITQu4vr4xnSDxMaL",
     "text": "So sorry, sir!\nA check is on its way!"
   },
+  "77235e4c": {
+    "file": "77235e4c.wav",
+    "duration": 1.576,
+    "envelope": "00lwyFCf79cbabaacbb8aLQMRPxm022000HZMLQFi000000vNyxDTOra000000000000000017hnmkljigggdgegdbdbc40",
+    "provider": "elevenlabs",
+    "voice": "cgSgspJ2msm6clMCkdW9",
+    "text": "[laughs] HAHAHA!"
+  },
   "97fa7401": {
     "file": "97fa7401.wav",
     "duration": 1.191,
@@ -42,6 +66,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "provider": "elevenlabs",
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "Thanks, Dashcam."
+  },
+  "b0c68e00": {
+    "file": "b0c68e00.wav",
+    "duration": 3.114,
+    "envelope": "00xGNOQSSQKyg8779aefkcfnvADLQSSQOOMLMLCwywopmsqnnkja6100000000000000000000000aFSVTYZVUTTQPNNLJKIIHGJLMMFAukhmpyCzOKHJGHJFDAqm90mmjmOKHttokfcb7fsyEEHJQVQSURJFEFFEEEIJGHDBDDDzvusspjd96667af",
+    "provider": "elevenlabs",
+    "voice": "nPczCjzI2devNBz1zQrb",
+    "text": "F U! Learn how\nto DRIVE!"
   },
   "fd961a77": {
     "file": "fd961a77.wav",

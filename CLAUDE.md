@@ -185,7 +185,8 @@ export default scene({
 - Moods: neutral, happy, angry (V brows, red flush, shouting), scared (wide eyes, sweat, trembling), shocked, smug,
   sad, pain (wince), dazed (eyes shut). Blend over 0.25s. Bubbles go red/shaky when angry, wobbly when scared.
 - Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call, film,
-  yell, arms-crossed, hold-neck, shove, cuffed, hands-up. Body: jump, dance, sit-ground, fall-over, cower, stagger,
+  yell, arms-crossed, hold-neck, shove, cuffed, hands-up, middle-finger, smack-wheel (seated: laughing, slapping the
+  wheel, with thuds). Body: jump, dance, sit-ground, fall-over, cower, stagger,
   reach-in, tased, get-up. (`npm run catalog` is the source of truth.)
 
 ### Cars
@@ -202,6 +203,8 @@ export default scene({
 - **Crashes**: `crashInto` keeps the current speed (braking at `brake` m/s²) and simulates to the exact contact
   moment — the target may be moving. Then: striker bounces back, victim is shoved and spun, burst + debris + smoke,
   "CRASH!", camera shake, crash sound.
+- Brake lights come on by themselves while a car slows down and while it waits at a stop with someone in the driver's
+  seat (parked/empty cars stay dark). Door windows swing out with their doors. Every car has a steering wheel.
 - `police` model: light bar + siren. `siren(true)` lights + wail, `siren(true, { sound: false })` lights only.
 - `path.arc(center, radius, fromDeg, toDeg, steps)` gives points for donuts / U-turns.
 - `dump-truck` (dirt truck) + `truck.mudOnto(car)`: clumps arc off the back and land on the target's windshield,
@@ -229,6 +232,10 @@ a small-screen filter — put a shot right after it).
   `dashcam`. Seat someone with `place(chairPos, chairFacing)` + `play("sit-chair", { duration: 0.02 })` on the cut;
   `hold-mug` / `sip` / `set-down` / `look-left|right` layer on top. `show-check` holds up a $1,000,000 check.
 - Example: `scenes/mud-money.scene.ts` (highway → home → company yard → mailbox → porch).
+- `prop("traffic-light", [x, z], { facing: 270, green: { cue, delay } })`: pole on the right shoulder, arm reaching
+  7.8m over the lanes (local -X), stop line 1.5m in front. Red until `green`. Facing 270 serves +X traffic on the
+  highway with the pole at z ≈ 9.3 (heads over z 5.5 and 1.9, stop line at x − 1.5). See `scenes/red-light-rage.scene.ts`.
+- `style: "sunset"` draws a low sun on the horizon toward +X, so driving +X is "into the sunset".
 
 ### Overlays & sound
 

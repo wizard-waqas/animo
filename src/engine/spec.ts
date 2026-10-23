@@ -31,7 +31,7 @@ export const SETS = ["suburb", "city", "highway", "parking-lot", "empty"] as con
 export const FORMATS = ["vertical", "landscape", "square"] as const;
 export const PROP_TYPES = [
   "tree", "pine", "bush", "house", "building", "cone", "lamp", "bench", "mailbox", "garage",
-  "chair", "table", "mug", "dashcam", "bump", "porch",
+  "chair", "table", "mug", "dashcam", "bump", "porch", "traffic-light",
 ] as const;
 export const SOUND_NAMES = ["crash", "honk", "boing", "thud", "whoosh", "door-slam", "pop", "screech", "splat"] as const;
 
@@ -179,6 +179,8 @@ export const propSchema = z.object({
   set: enumOf(SETS).optional(),
   /** Appears at this time, or when a cue ends (+ delay). */
   from: z.union([finite, z.object({ cue: z.string(), delay: finite.default(0) })]).optional(),
+  /** traffic-light: red until this time (or cue end + delay), then green. Without it the light stays red. */
+  green: z.union([finite, z.object({ cue: z.string(), delay: finite.default(0) })]).optional(),
 });
 
 export const sceneSchema = z.object({

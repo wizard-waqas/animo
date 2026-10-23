@@ -145,7 +145,10 @@ export interface ClipDefinition {
   itemUntil?: number;
 }
 
-export type HandItem = "phone" | "mug" | "check";
+export type HandItem = "phone" | "mug" | "check" | "finger";
+
+/** smack-wheel slams per second; the hands hit the wheel at start + k / SMACK_RATE (k ≥ 1). */
+export const SMACK_RATE = 2.2;
 
 /** Sitting on a chair (seat ~0.45m): thighs forward and a little down, shins straight down, hands on the lap. */
 export const CHAIR_POSE: Pose = withPose({
@@ -400,6 +403,27 @@ export const CLIPS = {
       rShoulderX: 1.2, rShoulderZ: 0.35 + 0.04 * wave(t, 2), rElbow: 0.55, lShoulderX: 1.2, lShoulderZ: 0.35 + 0.04 * wave(t, 2, 1), lElbow: 0.55,
       headX: -0.12, spineX: -0.06,
     }),
+  },
+  "middle-finger": {
+    layer: "gesture", defaultDuration: 2, description: "Flips the bird: right fist up, middle finger raised, jabbing it forward", item: "finger",
+    pose: (t) => withPose({
+      rShoulderX: 1.25 + 0.12 * Math.max(0, wave(t, 2.4)), rShoulderZ: 0.22, rElbow: 1.7 - 0.1 * Math.max(0, wave(t, 2.4)),
+      spineX: 0.12, spineY: 0.1, headX: -0.12, headZ: 0.06,
+      lShoulderX: 0.25, lShoulderZ: 0.3, lElbow: 1.3,
+    }),
+  },
+  "smack-wheel": {
+    layer: "gesture", defaultDuration: 2.5, description: "Cracking up at the wheel: head thrown back laughing, both hands slapping the steering wheel",
+    pose: (t) => {
+      const phase = (t * SMACK_RATE) % 1;
+      // Hands rise slowly, then slam down onto the wheel at the end of each cycle.
+      const lift = phase < 0.7 ? Math.sin((phase / 0.7) * (Math.PI / 2)) : Math.cos(((phase - 0.7) / 0.3) * (Math.PI / 2));
+      return withPose({
+        lShoulderX: 0.85 + 0.4 * lift, rShoulderX: 0.85 + 0.4 * lift, lShoulderZ: 0.14, rShoulderZ: 0.14,
+        lElbow: 0.6 + 0.55 * lift, rElbow: 0.6 + 0.55 * lift,
+        headX: -0.35 + 0.1 * Math.abs(wave(t, 3.2)), spineX: -0.12 + 0.06 * Math.abs(wave(t, 3.2)), headZ: 0.05 * wave(t, 1.3),
+      });
+    },
   },
   "sit-ground": {
     layer: "body", defaultDuration: 3, description: "Sits down cross-legged-ish on the ground",
