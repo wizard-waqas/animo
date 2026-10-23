@@ -185,7 +185,8 @@ export const sceneSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/, "scene id must be kebab-case"),
   title: z.string().optional(),
   duration: finite.positive().max(60),
-  fps: z.union([z.literal(30), z.literal(60)]).default(60),
+  /** 30 is what phones and social feeds play; it halves render time. Ask for 60 only when a clip needs it. */
+  fps: z.union([z.literal(30), z.literal(60)]).default(30),
   format: enumOf(FORMATS).default("vertical"),
   style: enumOf(STYLES).default("sunny"),
   set: enumOf(SETS).default("suburb"),

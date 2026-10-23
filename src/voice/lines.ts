@@ -1,5 +1,16 @@
 import type { Mood } from "../engine/expression";
-import { VOICE_CLIPS, type VoiceClip } from "../../voices/manifest";
+
+/** One recorded line. Produced by `npm run voices`, listed in voices/manifest.ts. */
+export interface VoiceClip {
+  /** File in voices/ (16-bit mono WAV). */
+  file: string;
+  duration: number;
+  /** Loudness for lip sync, 60 samples per second. */
+  envelope: string;
+  provider: string;
+  voice: string;
+  text: string;
+}
 
 /**
  * Pure helpers shared by the engine (browser + node) and the voice generator (node only).
@@ -22,12 +33,16 @@ const hash = (value: string) => {
 
 export const lineKey = (voice: string, text: string, mood: Mood) => hash(`${voice}|${mood}|${text}`);
 
-let overrides: Record<string, VoiceClip> = {};
-/** Tests can register clips without touching voices/manifest.ts. */
+/**
+ * Recorded clips are data, not code: the CLI registers voices/manifest.ts at startup, the render bundle gets the
+ * scene's clips through inputProps, tests register their own. Keeping the manifest out of the engine means a new
+ * recording never changes the webpack bundle.
+ */
+let registry: Record<string, VoiceClip> = {};
 export const registerVoiceClips = (clips: Record<string, VoiceClip>) => {
-  overrides = { ...overrides, ...clips };
+  registry = { ...registry, ...clips };
 };
-export const findVoiceClip = (key: string): VoiceClip | undefined => overrides[key] ?? VOICE_CLIPS[key];
+export const findVoiceClip = (key: string): VoiceClip | undefined => registry[key];
 
 /** Loudness (0..1) of a clip at `time` seconds, for lip sync. Envelope is 60 samples/s, one char each ("0"–"z"). */
 export const ENVELOPE_RATE = 60;

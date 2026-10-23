@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scenes } from "../scenes";
+import { loadScenes } from "../scripts/lib";
 import { compileScene, evaluateScene, findJolts } from "../src/engine/compile";
 import { at, car, character, scene, next } from "../src/engine/dsl";
 
@@ -66,7 +66,9 @@ describe("scene warnings", () => {
   });
 });
 
-describe("bundled scenes", () => {
+const scenes = await loadScenes();
+
+describe("every scene file", () => {
   it.each(scenes.map((spec) => [spec.id, spec] as const))("%s compiles with no warnings or jolts", (_, spec) => {
     const compiled = compileScene(spec);
     // Unrecorded dialogue is a to-do (needs an API key), not a scene bug.

@@ -3,10 +3,11 @@ import { useThree } from "@react-three/fiber";
 import { useLayoutEffect, useMemo } from "react";
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import type { PerspectiveCamera } from "three";
-import { scenes } from "../../scenes";
 import { CARS, type CarShape } from "../catalog/cars";
 import type { CameraState } from "../engine/cameraTrack";
 import { compileScene, evaluateScene } from "../engine/compile";
+import { type SceneSpec, parseScene } from "../engine/spec";
+import { type VoiceClip, registerVoiceClips } from "../voice/lines";
 import { CarModel } from "./CarModel";
 import { CharacterModel } from "./CharacterModel";
 import { CrashEffect, MudEffect } from "./CrashEffect";
@@ -15,28 +16,41 @@ import { DashcamOverlay, DebugHud, Overlays } from "./Overlays";
 import { STYLE_PRESETS } from "./styles";
 import { World } from "./World";
 
+/**
+ * Everything the video needs arrives as plain data (inputProps), so the webpack bundle depends only on src/:
+ * editing a scene or recording a voice line never rebuilds it.
+ */
 export interface SceneVideoProps extends Record<string, unknown> {
-  sceneId: string;
+  /** The validated scene (JSON-safe; re-parsed here because it crosses the inputProps boundary). */
+  spec: SceneSpec;
+  /** Recorded voice lines this scene uses, keyed by line key. */
+  clips: Record<string, VoiceClip>;
   /** Name tags, coordinates and a ground grid — used for contact sheets. */
   debug?: boolean;
-  /** Render at 30fps for quick previews. */
+  /** Quick look: 30fps, no shadows, no antialiasing. */
   preview?: boolean;
+  /** No audio tag (stills don't play sound, and generating it would be wasted work). */
+  silent?: boolean;
 }
 
-export const SceneVideo = ({ sceneId, debug = false }: SceneVideoProps) => {
+export const SceneVideo = ({ spec: rawSpec, clips, debug = false, preview = false, silent = false }: SceneVideoProps) => {
   const frameNumber = useCurrentFrame();
   const { width, height, fps } = useVideoConfig();
-  const spec = scenes.find((scene) => scene.id === sceneId);
-  if (!spec) throw new Error(`Unknown scene ${sceneId}`);
-  const compiled = useMemo(() => compileScene(spec), [spec]);
+  // Props are stable per page load; the key guards against a new object with the same content.
+  const propsKey = JSON.stringify({ rawSpec, clips });
+  const { spec, compiled } = useMemo(() => {
+    registerVoiceClips(clips);
+    const parsed = parseScene(rawSpec);
+    return { spec: parsed, compiled: compileScene(parsed) };
+  }, [propsKey]);
   const frame = evaluateScene(compiled, frameNumber / fps);
   const style = STYLE_PRESETS[spec.style];
 
   return (
     <AbsoluteFill style={{ backgroundColor: style.skyHorizon }}>
-      <ThreeCanvas width={width} height={height} shadows flat gl={{ antialias: true }} camera={{ near: 0.3, far: 900 }}>
+      <ThreeCanvas width={width} height={height} shadows={!preview} flat gl={{ antialias: !preview }} camera={{ near: 0.3, far: 900 }}>
         <CameraRig camera={frame.camera} />
-        <World style={style} set={frame.set} props={frame.props} focus={frame.camera.lookAt} debug={debug} time={frame.t} />
+        <World style={style} set={frame.set} props={frame.props} focus={frame.camera.lookAt} debug={debug} time={frame.t} shadowMap={preview ? 0 : debug ? 1024 : 2048} />
         {Object.entries(frame.cars).map(([id, state]) => {
           const actor = spec.cast[id];
           if (actor.kind !== "car" || frame.offstage.includes(id)) return null;

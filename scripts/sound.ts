@@ -1,34 +1,30 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
-import { scenes } from "../scenes";
-import { encodeWav, SAMPLE_RATE } from "../src/audio/dsp";
-import { buildSoundtrack, type Soundtrack } from "../src/audio/soundtrack";
-import { compileScene } from "../src/engine/compile";
+import { SAMPLE_RATE } from "../src/audio/dsp";
+import type { Soundtrack } from "../src/audio/soundtrack";
+import { type CompiledScene, compileScene } from "../src/engine/compile";
 import type { SceneSpec } from "../src/engine/spec";
-import { findScene, parseArgs } from "./lib";
+import { ensureSound, findScene, loadScenes, outDirFor, parseArgs } from "./lib";
 
 /**
- * Generate the sound track(s) into public/audio/<id>.wav (render/stills/studio call this automatically).
+ * Generate the sound track into public/audio/<id>.wav (render/preflight/studio call this automatically; it is
+ * cached, so an unchanged scene costs nothing).
  *   npm run sound -- <scene-id> [--spectrogram]   one scene (+ a spectrogram PNG with event markers)
  *   npm run sound -- --all                         every scene
  */
-export const generateSound = (spec: SceneSpec, options: { quiet?: boolean; spectrogram?: boolean } = {}) => {
-  const outDir = path.resolve("public", "audio");
-  mkdirSync(outDir, { recursive: true });
-  const file = path.join(outDir, `${spec.id}.wav`);
-  if (!spec.sound.enabled) return undefined;
+export const generateSound = (compiled: CompiledScene, options: { quiet?: boolean; spectrogram?: boolean } = {}) => {
   const started = Date.now();
-  const soundtrack = buildSoundtrack(compileScene(spec));
-  writeFileSync(file, encodeWav(soundtrack.bus.left, soundtrack.bus.right));
-  if (!options.quiet) printSummary(spec, soundtrack, Date.now() - started);
-  if (options.spectrogram) {
-    const image = path.resolve("out", spec.id, "sound.png");
-    mkdirSync(path.dirname(image), { recursive: true });
-    writeFileSync(image, spectrogram(soundtrack));
+  // Printing or plotting needs the events, so those runs rebuild instead of using the cache.
+  const result = ensureSound(compiled, { force: !options.quiet || options.spectrogram });
+  if (!result) return undefined;
+  if (!options.quiet && result.soundtrack) printSummary(compiled.spec, result.soundtrack, Date.now() - started);
+  if (options.spectrogram && result.soundtrack) {
+    const image = path.join(outDirFor(compiled.spec.id), "sound.png");
+    writeFileSync(image, spectrogram(result.soundtrack));
     console.log(`  spectrogram: ${image}  (markers: green footstep, yellow honk, red crash, blue door, magenta squeal, white other)`);
   }
-  return file;
+  return result.file;
 };
 
 const printSummary = (spec: SceneSpec, soundtrack: Soundtrack, ms: number) => {
@@ -133,6 +129,6 @@ const fft = (re: Float64Array, im: Float64Array) => {
 const isMain = process.argv[1] && path.resolve(process.argv[1]).endsWith(path.join("scripts", "sound.ts"));
 if (isMain) {
   const { positional, flags } = parseArgs();
-  const targets = flags.all ? scenes : [findScene(positional[0])];
-  for (const spec of targets) generateSound(spec, { spectrogram: Boolean(flags.spectrogram), quiet: Boolean(flags.quiet) });
+  const targets = flags.all ? await loadScenes() : [await findScene(positional[0])];
+  for (const spec of targets) generateSound(compileScene(spec), { spectrogram: Boolean(flags.spectrogram), quiet: Boolean(flags.quiet) });
 }
