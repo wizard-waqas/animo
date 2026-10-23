@@ -59,6 +59,8 @@ interface CharacterOptions {
   facing?: number;
   colors?: { shirt?: string; pants?: string; hair?: string; skin?: string; shoes?: string };
   seatedIn?: { car: ActorRef; seat: SeatName };
+  /** Voice for spoken lines (ElevenLabs voice id / Google voice name). Defaults per character model. */
+  voice?: string;
 }
 
 export const character = (id: string, model: CharacterModel, options: CharacterOptions) => ({
@@ -70,6 +72,7 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
     facing: options.facing,
     colors: options.colors,
     seatedIn: options.seatedIn && { car: idOf(options.seatedIn.car), seat: options.seatedIn.seat },
+    voice: options.voice,
   },
   walkTo: (target: Target, opts: { speed?: number; facing?: number } = {}): ActionInput => ({ type: "walk", actor: id, target, run: false, ...opts }),
   runTo: (target: Target, opts: { speed?: number; facing?: number } = {}): ActionInput => ({ type: "walk", actor: id, target, run: true, ...opts }),
@@ -77,6 +80,10 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
   turnTo: (toward: Target | number, opts: { duration?: number } = {}): ActionInput => ({ type: "turn", actor: id, toward, ...opts }),
   face: (other: ActorRef, opts: { duration?: number } = {}): ActionInput => ({ type: "turn", actor: id, toward: { actor: idOf(other), anchor: "front", distance: 0.01 }, ...opts }),
   play: (clip: ClipName, opts: { duration?: number } = {}): ActionInput => ({ type: "clip", actor: id, clip, ...opts }),
+  /**
+   * Speak a line: speech bubble + realistic voice (after `npm run voices`). Lasts as long as the recording
+   * unless `duration` is given. Delivery follows the current mood; [tags] like [whispers] direct it further.
+   */
   say: (text: string, opts: { duration?: number } = {}): ActionInput => ({ type: "say", actor: id, text, ...opts }),
   /** Change facial expression: neutral, happy, angry, scared, shocked, smug, sad. Blends in over 0.25s. */
   feel: (mood: Mood): ActionInput => ({ type: "feel", actor: id, mood }),

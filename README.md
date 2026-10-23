@@ -14,6 +14,16 @@ npm run studio
 
 `npm run studio` opens Remotion Studio in your browser. Pick a scene on the left, then hit play or scrub the timeline.
 
+## Voices (realistic AI speech)
+
+Dialogue uses a realistic AI voice service. Pick one and set its key as an environment variable:
+
+- **ElevenLabs** (recommended, best acting): `ELEVENLABS_API_KEY`
+- **Google Cloud Text-to-Speech** (Chirp 3 HD voices): `GOOGLE_TTS_API_KEY`
+
+Then run `npm run voices -- <scene>` (render does this automatically). Each line is recorded once and saved in
+`voices/`. Commit that folder, so re-renders are free and work offline.
+
 ## Rendering a video
 
 ```bash
@@ -31,6 +41,7 @@ You can also render from Studio with its Render button.
 | `npm run catalog` | Lists every character, car, animation, camera preset, set and style |
 | `npm run inspect -- <scene>` | Timeline, positions and problem warnings (no rendering) |
 | `npm run stills -- <scene>` | Contact sheet of frames → `out/<scene>/sheet.png` |
+| `npm run voices -- <scene>` | Records the dialogue with an AI voice (needs an API key) |
 | `npm run sound -- <scene>` | Builds the soundtrack (render does this automatically) |
 | `npm run render -- <scene>` | Renders the MP4 with sound |
 | `npm run check` | Typecheck + unit tests |

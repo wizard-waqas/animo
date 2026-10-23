@@ -2,7 +2,9 @@ import type { CompiledScene } from "../engine/compile";
 import type { Vec3 } from "../engine/math";
 import { STRIDE } from "../engine/pose";
 import type { SoundName } from "../engine/spec";
-import { Lowpass, Rng, SAMPLE_RATE, StereoBus, panGains } from "./dsp";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { Lowpass, Rng, SAMPLE_RATE, StereoBus, decodeWav, panGains } from "./dsp";
 import * as sounds from "./sounds";
 
 /**
@@ -16,7 +18,7 @@ import * as sounds from "./sounds";
 export interface SoundEvent { time: number; kind: string; actor?: string }
 export interface Soundtrack { bus: StereoBus; events: SoundEvent[]; screech: { actor: string; start: number; end: number }[] }
 
-const GAINS = { footstep: 0.32, door: 0.5, engine: 0.55, tires: 0.5, screech: 0.32, honk: 0.5, crash: 1.0, hop: 0.6, clip: 0.45, ambience: 1 };
+const GAINS = { footstep: 0.32, door: 0.5, engine: 0.55, tires: 0.5, screech: 0.32, honk: 0.5, crash: 1.0, hop: 0.6, clip: 0.45, ambience: 1, voice: 0.95 };
 
 export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   const duration = scene.spec.duration;
@@ -121,6 +123,21 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   // ----- cars: continuous engine, tire roll and squeal
   for (const [id, car] of Object.entries(scene.cars)) {
     screechSpans.push(...renderCar(scene, id, car, bus, placement, rng));
+  }
+
+  // ----- dialogue: recorded voice lines, kept clear (gentle distance falloff) and panned to the speaker
+  if (scene.spec.sound.voices) {
+    for (const [id, track] of Object.entries(scene.characters)) {
+      for (const line of track.speech) {
+        if (!line.clip) continue;
+        const file = path.resolve("voices", line.clip.file);
+        if (!existsSync(file)) continue;
+        const voice = decodeWav(readFileSync(file));
+        const { pan, gain } = placement(track.state(line.start).pos, line.start);
+        bus.place(voice, line.start, GAINS.voice * Math.max(0.7, gain), pan * 0.6);
+        events.push({ time: line.start, kind: "voice", actor: id });
+      }
+    }
   }
 
   if (scene.spec.sound.ambience) renderAmbience(scene, bus, rng);

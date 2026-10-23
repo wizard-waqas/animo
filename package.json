@@ -10,6 +10,7 @@
     "inspect": "tsx scripts/inspect.ts",
     "stills": "tsx scripts/stills.ts",
     "sound": "tsx scripts/sound.ts",
+    "voices": "tsx scripts/voices.ts",
     "render": "tsx scripts/render.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

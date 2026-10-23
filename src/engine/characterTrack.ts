@@ -2,6 +2,8 @@ import type { SeatName } from "../catalog/cars";
 import { type CharacterLook, RIG } from "../catalog/characters";
 import type { CarTrack } from "./carTrack";
 import { type Face, type Mood, faceAt } from "./expression";
+import type { VoiceClip } from "../../voices/manifest";
+import { envelopeAt, estimateSpeechDuration, findVoiceClip, lineKey, stripTags } from "../voice/lines";
 import { type Vec2, type Vec3, DEG, angleDelta, clamp01, distance2, headingOf, lerp, lerpAngle, progress, sub2 } from "./math";
 import { type Obstacle, routeAround } from "./route";
 import {
@@ -15,6 +17,8 @@ export interface CharacterState {
   pose: Pose;
   ridingIn?: string;
   face?: Face;
+  /** 0..1 mouth opening from speech (lip sync). */
+  talk?: number;
   /** Walking/running/turning-step info (distance in rig units), used to place footstep sounds. */
   gait?: { distance: number; run: boolean; weight: number };
 }
@@ -40,7 +44,18 @@ type BodySegment = { start: number; end: number; cut: number } & (
 );
 
 interface Gesture { start: number; end: number; clip: ClipName }
-export interface Speech { start: number; end: number; text: string }
+export interface Speech {
+  start: number;
+  end: number;
+  /** Text shown in the bubble (delivery tags removed). */
+  text: string;
+  /** Text as written (with tags), what the voice is asked to say. */
+  script: string;
+  mood: Mood;
+  /** Identifies the recording: hash of voice, mood and text. */
+  key: string;
+  clip?: VoiceClip;
+}
 
 /** Which upper-body joints a gesture actually moves, so other joints keep doing what they were doing. */
 const gestureKeyCache = new Map<ClipName, (keyof Pose)[]>();
@@ -67,6 +82,8 @@ export class CharacterTrack {
     readonly look: CharacterLook,
     start: { pos: Vec2; facing: number; seatedIn?: { car: string; seat: SeatName } },
     private readonly cars: Record<string, CarTrack>,
+    /** Voice identity for spoken lines (see voices.ts). */
+    readonly voice = "model:casual-guy",
   ) {
     this.initial = start.seatedIn
       ? { mode: "ride", car: start.seatedIn.car, seat: start.seatedIn.seat }
@@ -173,9 +190,24 @@ export class CharacterTrack {
     return faceAt(this.moods, t);
   }
 
-  addSpeech(start: number, text: string, duration: number) {
-    this.speech.push({ start, end: start + duration, text });
-    return start + duration;
+  addSpeech(start: number, script: string, duration?: number) {
+    const mood = [...this.moods].reverse().find((change) => change.time <= start)?.mood ?? "neutral";
+    const key = lineKey(this.voice, script, mood);
+    const clip = findVoiceClip(key);
+    // A recorded line sets its own length (plus a beat so the bubble doesn't vanish mid-word).
+    const length = duration ?? (clip ? clip.duration + 0.25 : estimateSpeechDuration(script));
+    this.speech.push({ start, end: start + length, text: stripTags(script), script, mood, key, clip });
+    return start + length;
+  }
+
+  /** How open the mouth is from speech at time t (0..1): follows the recording's loudness, or flaps without one. */
+  talkLevel(t: number) {
+    for (const line of this.speech) {
+      if (t < line.start || t > line.end) continue;
+      if (line.clip) return Math.min(1, envelopeAt(line.clip.envelope, t - line.start) * 1.4);
+      return 0.5 + 0.5 * Math.abs(Math.sin(t * 14));
+    }
+    return 0;
   }
 
   /** Walks to the door if needed, then gets in. Returns the end time. */
@@ -227,7 +259,7 @@ export class CharacterTrack {
     let base: CharacterState;
     if (segment && t < Math.min(segment.cut, segment.end)) base = this.evaluateSegment(segment, t);
     else base = this.evaluateRest(this.restAt(t), t);
-    return { ...base, pose: this.applyGestures(base.pose, t), face: this.face(t) };
+    return { ...base, pose: this.applyGestures(base.pose, t), face: this.face(t), talk: this.talkLevel(t) };
   }
 
   private evaluateRest(rest: RestState, t: number): CharacterState {

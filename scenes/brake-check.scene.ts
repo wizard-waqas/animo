@@ -12,7 +12,7 @@ const driverB = character("driver-b", "business-woman", { at: [0, 0], seatedIn: 
 export default scene({
   id: "brake-check",
   title: "Brake check",
-  duration: 26,
+  duration: 27.5,
   format: "vertical",
   set: "highway",
   cast: [carA, carB, driverA, driverB],
@@ -34,14 +34,14 @@ export default scene({
     after("crash", driverA.exit(), 1.3),
     next(driverA.walkTo(carA.spot("left", 2.6), { facing: 90 })).as("a-ready"),
     after("a-ready", driverB.runTo(driverA.spot("front", 1.5))).as("b-arrives"),
-    after("b-arrives", driverB.say("OMG you just\nHIT me!!", { duration: 2.2 })).as("yell"),
+    after("b-arrives", driverB.say("OMG you just\nHIT me!!")).as("yell"),
     after("b-arrives", driverB.play("yell", { duration: 2.2 })),
 
-    after("yell", driverA.say("No I didn't.", { duration: 1.4 }), 0.2).as("no"),
+    after("yell", driverA.say("No I didn't."), 0.2).as("no"),
     after("no", driverA.feel("smug")),
-    after("no", driverA.say("And I have a dashcam\nto prove it.", { duration: 2.2 })).as("dashcam"),
+    after("no", driverA.say("And I have a dashcam\nto prove it.")).as("dashcam"),
     after("no", driverA.play("point", { duration: 1.8 })),
-    after("dashcam", driverA.say("You're done for.", { duration: 1.6 })).as("done"),
+    after("dashcam", driverA.say("You're done for.")).as("done"),
     after("dashcam", driverA.play("arms-crossed", { duration: 2.6 })),
 
     after("dashcam", driverB.feel("scared"), 0.4),

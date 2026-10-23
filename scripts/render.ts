@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { browserOptions, findScene, parseArgs } from "./lib";
 import { generateSound } from "./sound";
+import { recordVoices } from "./voices";
 
 /**
  * Render a scene to MP4.
@@ -21,6 +22,8 @@ mkdirSync(outDir, { recursive: true });
 const output = path.join(outDir, preview ? "preview.mp4" : `${spec.id}.mp4`);
 
 const started = Date.now();
+// Record any new dialogue first (no-op without an API key), then build the sound track.
+await recordVoices(spec);
 generateSound(spec, { quiet: true });
 const serveUrl = await bundle({ entryPoint: path.resolve("src/index.ts"), onProgress: () => undefined });
 const composition = await selectComposition({ serveUrl, id: spec.id, inputProps, ...browserOptions() });

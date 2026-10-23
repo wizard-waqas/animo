@@ -41,7 +41,8 @@ const characterActions = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("turn"), actor: z.string(), toward: z.union([targetSchema, finite]), duration: finite.positive().optional() }),
   z.object({ type: z.literal("clip"), actor: z.string(), clip: enumOf(CLIP_NAMES), duration: finite.positive().optional() }),
-  z.object({ type: z.literal("say"), actor: z.string(), text: z.string().min(1).max(80), duration: finite.positive().default(2) }),
+  /** Duration defaults to the recorded voice clip's length (or an estimate until voices are generated). */
+  z.object({ type: z.literal("say"), actor: z.string(), text: z.string().min(1).max(120), duration: finite.positive().optional() }),
   z.object({ type: z.literal("enter"), actor: z.string(), car: z.string(), seat: enumOf(SEAT_NAMES) }),
   z.object({ type: z.literal("exit"), actor: z.string() }),
   z.object({ type: z.literal("feel"), actor: z.string(), mood: enumOf(MOOD_NAMES) }),
@@ -125,6 +126,8 @@ export const characterSpecSchema = z.object({
   colors: z.object({ shirt: z.string(), pants: z.string(), hair: z.string(), skin: z.string(), shoes: z.string() }).partial().default({}),
   /** Start already sitting in a car. */
   seatedIn: z.object({ car: z.string(), seat: enumOf(SEAT_NAMES) }).optional(),
+  /** Voice id for spoken lines (ElevenLabs voice id or Google voice name). Defaults per character model. */
+  voice: z.string().optional(),
 });
 
 export const carSpecSchema = z.object({
@@ -158,7 +161,11 @@ export const sceneSchema = z.object({
   cast: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/, "actor ids must be kebab-case"), z.union([characterSpecSchema, carSpecSchema])),
   timeline: z.array(timelineEntrySchema),
   /** Sound effects + background ambience. */
-  sound: z.object({ enabled: z.boolean().default(true), ambience: z.boolean().default(true), volume: finite.min(0).max(2).default(1) }).default({}),
+  sound: z.object({
+    enabled: z.boolean().default(true), ambience: z.boolean().default(true), volume: finite.min(0).max(2).default(1),
+    /** Spoken dialogue for say() lines (generated with `npm run voices`). */
+    voices: z.boolean().default(true),
+  }).default({}),
 });
 
 export type Anchor = z.infer<typeof anchorSchema>;

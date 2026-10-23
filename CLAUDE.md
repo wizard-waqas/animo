@@ -20,9 +20,12 @@ procedural (built from primitives in code) — no model files, nothing to downlo
 5. `npm run sound -- <id> --spectrogram` — builds the soundtrack and prints every sound event (footsteps, honks,
    crash, doors, squeal spans, peak level). The spectrogram PNG (`out/<id>/sound.png`) is how to "listen": check
    events line up and nothing turns into broadband noise. render/stills/studio regenerate sound automatically.
-6. `npm run render -- <id> --preview` (30fps, half size) → then `npm run render -- <id>` for the final.
+6. `npm run voices -- <id>` — records realistic voices for new `say()` lines (needs `ELEVENLABS_API_KEY` or
+   `GOOGLE_TTS_API_KEY`), saved in `voices/` + `voices/manifest.ts`. **Commit them** — re-renders never pay twice.
+   After recording, re-run inspect: line lengths now come from the recordings and cue timings shift.
+7. `npm run render -- <id> --preview` (30fps, half size) → then `npm run render -- <id>` for the final.
    `--scale 0.75` (810×1440) is a good phone-sized final. The scale must give whole pixels.
-7. `npm run check` (typecheck + tests) after engine changes.
+8. `npm run check` (typecheck + tests) after engine changes.
 
 ## World conventions
 
@@ -96,6 +99,14 @@ the smoothness check flags blends that move the camera too far too fast.
 
 Overlays: `caption(text, {position: top|center|bottom, size: title|normal, duration})`, speech bubbles via `say`
 (use `\n` for line breaks). Bubbles turn red/shaking when the speaker is angry, wobbly when scared.
+
+Voices (`src/voice/`, `scripts/voices.ts`): each `say()` line is recorded once by a realistic AI voice and keyed
+by hash(voice, mood, text) — changing any of those records a new take. The mood at the line's start sets the
+delivery (ElevenLabs v3 tags: angry → [angry]/[shouting], scared → [nervous] [scared], smug → [confident]…);
+put tags in the text yourself for more direction: `say("[whispers] don't look now")` (tags never show in bubbles).
+Don't pass `duration` to `say()` — let the recording set it. Mouths lip-sync to the recording's loudness.
+Default voices per character model are in `src/voice/voices.ts`; override with `character(..., { voice: "<id>" })`.
+`npm run voices -- --list` shows the account's voices. Switching provider → `--force` to re-record.
 
 Faces: `person.feel(mood)` — neutral, happy, angry (V brows, red flush, shouting mouth), scared (wide eyes,
 sweat drop, trembling), shocked, smug, sad. Blends over 0.25s. Pair with clips: `yell` (gesture), `cower` (body),

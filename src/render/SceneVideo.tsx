@@ -52,7 +52,7 @@ export const SceneVideo = ({ sceneId, debug = false }: SceneVideoProps) => {
             state={state}
             time={frame.t}
             seed={index}
-            talking={frame.bubbles.some((bubble) => bubble.actor === id)}
+            talk={state.talk ?? 0}
           />
         ))}
         {frame.crashes.map((crash) => (

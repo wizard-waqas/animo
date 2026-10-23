@@ -13,13 +13,14 @@ interface CharacterModelProps {
   look: CharacterLook;
   state: CharacterState;
   time: number;
-  talking: boolean;
+  /** 0..1 mouth opening from speech (lip sync). */
+  talk: number;
   /** Seed so characters don't all blink at the same moment. */
   seed: number;
 }
 
 /** Procedural cartoon person. Facing +Z, root at the ground between the feet. */
-export const CharacterModel = ({ look, state, time, talking, seed }: CharacterModelProps) => {
+export const CharacterModel = ({ look, state, time, talk, seed }: CharacterModelProps) => {
   const { pose } = state;
   return (
     <group position={state.pos} rotation={[0, state.facing, 0]} scale={look.height}>
@@ -33,7 +34,7 @@ export const CharacterModel = ({ look, state, time, talking, seed }: CharacterMo
           <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} />
           <Part geometry={shapes.cylinder(0.07, 0.08, 0.14)} color={look.skin} position={[0, 0.58, 0]} outline={false} />
           <group position={[0, RIG.headHeight, 0]} rotation={[pose.headX, pose.headY, pose.headZ]}>
-            <Head look={look} time={time} talking={talking} seed={seed} face={state.face ?? MOODS.neutral} />
+            <Head look={look} time={time} talk={talk} seed={seed} face={state.face ?? MOODS.neutral} />
           </group>
         </group>
       </group>
@@ -87,10 +88,10 @@ const mixColor = (from: string, to: string, amount: number) => {
   return `#${((channel(16) << 16) | (channel(8) << 8) | channel(0)).toString(16).padStart(6, "0")}`;
 };
 
-const Head = ({ look, time, talking, seed, face }: { look: CharacterLook; time: number; talking: boolean; seed: number; face: Face }) => {
+const Head = ({ look, time, talk, seed, face }: { look: CharacterLook; time: number; talk: number; seed: number; face: Face }) => {
   const blinkCycle = (time + seed * 1.37) % 3.7;
   const blinking = blinkCycle < 0.12 && face.sclera < 0.5;
-  const talkOpen = talking ? 0.5 + 0.5 * Math.abs(Math.sin(time * 14 + seed)) : 0;
+  const talkOpen = talk;
   // Shouting opens the mouth wider.
   const mouthOpen = Math.min(1, face.mouthOpen + talkOpen * (0.55 + face.redness * 0.8));
   const tremble = face.tremble * 0.035 * Math.sin(time * 41 + seed);

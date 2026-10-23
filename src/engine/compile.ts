@@ -4,6 +4,7 @@ import { CHARACTERS, type CharacterLook } from "../catalog/characters";
 import { type CameraState, CameraTrack } from "./cameraTrack";
 import { type CarState, CarTrack } from "./carTrack";
 import { type CharacterState, CharacterTrack, headHeight } from "./characterTrack";
+import { voiceIdentity } from "../voice/voices";
 import { type Vec2, type Vec3, DEG, add2, clamp, distance2, headingOf, length2, rotate2, scale2, sub2 } from "./math";
 import { type Action, type SceneSpec, type SoundName, type Target, FORMAT_SIZES } from "./spec";
 
@@ -68,7 +69,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     const look = { ...base, ...stripUndefined(actor.colors) };
     looks[id] = look;
     if (actor.seatedIn && !cars[actor.seatedIn.car]) throw new Error(`${id} starts seated in unknown car "${actor.seatedIn.car}"`);
-    characters[id] = new CharacterTrack(id, look, { pos: actor.at, facing: actor.facing * DEG, seatedIn: actor.seatedIn }, cars);
+    characters[id] = new CharacterTrack(id, look, { pos: actor.at, facing: actor.facing * DEG, seatedIn: actor.seatedIn }, cars, voiceIdentity(actor.model, actor.voice));
   }
 
   const resolveTarget = (target: Target, t: number): { pos: Vec2; facing?: number } => {
@@ -290,8 +291,12 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
       }
       case "clip":
         return { end: characters[action.actor].addClip(start, action.clip, action.duration), label: `play ${action.clip}` };
-      case "say":
-        return { end: characters[action.actor].addSpeech(start, action.text, action.duration), label: `say "${action.text}"` };
+      case "say": {
+        const end = characters[action.actor].addSpeech(start, action.text, action.duration);
+        const line = characters[action.actor].speech[characters[action.actor].speech.length - 1];
+        const recorded = line.clip ? `🎙 ${fmt(line.clip.duration)}s` : "no voice yet";
+        return { end, label: `say "${line.text.replace(/\n/g, " ")}" (${recorded})` };
+      }
       case "enter": {
         if (!cars[action.car]) throw new Error(`${action.actor}.enter: unknown car "${action.car}"`);
         return { end: characters[action.actor].addEnter(start, action.car, action.seat), label: `get into ${action.car} (${action.seat})` };
@@ -346,6 +351,10 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   for (const car of Object.values(cars)) car.finalize(spec.duration);
   if (!camera.hasShotAt(0)) warnings.push("No camera shot at t=0 — using the default wide shot until the first camera action.");
   warnings.push(...findBlockedShots(spec, camera));
+  const unrecorded = Object.values(characters).flatMap((track) => track.speech.filter((line) => !line.clip));
+  if (spec.sound.enabled && spec.sound.voices && unrecorded.length > 0) {
+    warnings.push(`${unrecorded.length} spoken line(s) have no voice recording yet (timing is estimated) — run \`npm run voices -- ${spec.id}\``);
+  }
   warnings.push(...findSpeedJumps(spec.duration, cars));
   warnings.push(...findCollisions(spec.duration, cars, characters));
 

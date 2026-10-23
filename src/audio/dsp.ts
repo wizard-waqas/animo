@@ -157,3 +157,66 @@ export const encodeWav = (left: Float32Array, right: Float32Array) => {
   }
   return buffer;
 };
+
+/** Read a 16-bit PCM WAV (mono or stereo) as mono floats, resampled to SAMPLE_RATE if needed. */
+export const decodeWav = (bytes: Buffer): Float32Array => {
+  let offset = 12;
+  let channels = 1;
+  let rate = SAMPLE_RATE;
+  let bits = 16;
+  while (offset + 8 <= bytes.length) {
+    const id = bytes.toString("ascii", offset, offset + 4);
+    const size = bytes.readUInt32LE(offset + 4);
+    if (id === "fmt ") {
+      channels = bytes.readUInt16LE(offset + 10);
+      rate = bytes.readUInt32LE(offset + 12);
+      bits = bytes.readUInt16LE(offset + 22);
+    }
+    if (id === "data") {
+      if (bits !== 16) throw new Error(`Only 16-bit WAV is supported (got ${bits}-bit)`);
+      const frames = Math.floor(Math.min(size, bytes.length - offset - 8) / (2 * channels));
+      const mono = new Float32Array(frames);
+      for (let i = 0; i < frames; i++) {
+        let sum = 0;
+        for (let c = 0; c < channels; c++) sum += bytes.readInt16LE(offset + 8 + (i * channels + c) * 2) / 32768;
+        mono[i] = sum / channels;
+      }
+      return rate === SAMPLE_RATE ? mono : resample(mono, rate, SAMPLE_RATE);
+    }
+    offset += 8 + size + (size % 2);
+  }
+  throw new Error("WAV has no data chunk");
+};
+
+/** Linear-interpolation resampler (fine for speech). */
+export const resample = (input: Float32Array, from: number, to: number) => {
+  const length = Math.round((input.length * to) / from);
+  const out = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    const position = (i * from) / to;
+    const index = Math.floor(position);
+    const next = Math.min(index + 1, input.length - 1);
+    out[i] = input[index] + (input[next] - input[index]) * (position - index);
+  }
+  return out;
+};
+
+/** 16-bit mono WAV. */
+export const encodeMonoWav = (samples: Float32Array) => {
+  const buffer = Buffer.alloc(44 + samples.length * 2);
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + samples.length * 2, 4);
+  buffer.write("WAVE", 8);
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(SAMPLE_RATE, 24);
+  buffer.writeUInt32LE(SAMPLE_RATE * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(samples.length * 2, 40);
+  for (let i = 0; i < samples.length; i++) buffer.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(samples[i] * 32767))), 44 + i * 2);
+  return buffer;
+};
