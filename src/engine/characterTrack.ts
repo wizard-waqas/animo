@@ -287,6 +287,14 @@ export class CharacterTrack {
     return undefined;
   }
 
+  /** The car this character is sitting in at time t (not while climbing in or out). */
+  seatedIn(t: number) {
+    const segment = this.segmentAt(t);
+    if (segment && (segment.kind === "enter" || segment.kind === "exit") && t < segment.end) return undefined;
+    const rest = this.restAt(t);
+    return rest.mode === "ride" ? { car: rest.car, seat: rest.seat } : undefined;
+  }
+
   /** Is this character's body inside a car right now (entering, exiting or seated)? */
   isInVehicle(t: number) {
     const segment = this.segmentAt(t);

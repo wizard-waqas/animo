@@ -1,6 +1,6 @@
 import { type CompiledScene, locationAt, onstage } from "../engine/compile";
 import type { Vec3 } from "../engine/math";
-import { STRIDE } from "../engine/pose";
+import { SMACK_RATE, STRIDE } from "../engine/pose";
 import type { SoundName } from "../engine/spec";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -82,6 +82,13 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
       if (segment.clip === "dance") for (let beat = segment.start; beat < segment.end; beat += 1 / 1.1) play(sounds.footstep(rng, look.height, false), beat, where, GAINS.footstep, "footstep", id);
     }
     for (const gesture of track.gestures) {
+      if (gesture.clip === "smack-wheel") {
+        const where = track.state(gesture.start).pos;
+        for (let k = 1; gesture.start + k / SMACK_RATE < gesture.end - 0.15; k++) {
+          play(sounds.thud(rng, 0.55), gesture.start + k / SMACK_RATE, [where[0], 1.1, where[2]], GAINS.clip, "wheel-smack", id);
+        }
+        continue;
+      }
       if (gesture.clip !== "clap") continue;
       const where = track.state(gesture.start).pos;
       // The clap pose closes the hands at t = (0.75 + k) / 3 seconds.

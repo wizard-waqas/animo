@@ -40,9 +40,10 @@ export const CarModel = ({ shape, color, state, label, night, dashcam, time, ins
       <group position={[0, state.heave, 0]} rotation={[state.pitch, 0, state.roll]} scale={[1, 1 + state.heave * 0.8, 1]}>
         <Part geometry={shapes.box(shape.width, bodyHeight, shape.length, 0.22)} color={color} position={[0, bodyY, 0]} />
         {!insideView && <Cabin shape={shape} color={color} />}
-        <FrontAndBack shape={shape} night={night} />
+        {!insideView && <SteeringWheel shape={shape} />}
+        <FrontAndBack shape={shape} night={night} braking={state.braking} />
         {availableSeats(shape).map((seat) => (
-          <Door key={seat} shape={shape} seat={seat} color={shape.extra === "police" ? "#f8f9fa" : color} openness={state.doors[seat]} />
+          <Door key={seat} shape={shape} seat={seat} color={shape.extra === "police" ? "#f8f9fa" : color} openness={state.doors[seat]} insideView={insideView} />
         ))}
         {shape.extra === "police" && <LightBar shape={shape} on={state.siren} time={time} />}
         {label && <DoorLabels shape={shape} text={label} />}
@@ -100,33 +101,76 @@ const Wheel = ({ shape, position, steer, spin }: { shape: CarShape; position: [n
   );
 };
 
+/** Where the side glass runs (z range), shared by the cabin and the door windows. */
+const glassSpan = (shape: CarShape) => {
+  const front = shape.cabinCenter + shape.cabinLength / 2;
+  const isCargo = shape.extra === "cargo";
+  const length = isCargo ? 1.9 : shape.cabinLength - 0.1;
+  const center = isCargo ? front - length / 2 : shape.cabinCenter;
+  return { back: center - length / 2, front: center + length / 2, center, length };
+};
+
+/** The part of a door that carries a window (z range), or undefined if the door sits below fixed glass only. */
+const doorWindowSpan = (shape: CarShape, seat: SeatName) => {
+  const layout = seatLayout(shape, seat)!;
+  const glass = glassSpan(shape);
+  const back = Math.max(layout.door.centerZ - layout.door.length / 2, glass.back) + 0.04;
+  const front = Math.min(layout.door.centerZ + layout.door.length / 2, glass.front) - 0.04;
+  return front - back > 0.2 ? { back, front } : undefined;
+};
+
 const Cabin = ({ shape, color }: { shape: CarShape; color: string }) => {
   const cabinHeight = shape.roof - shape.beltline;
   const cabinWidth = shape.width * 0.88;
   const front = shape.cabinCenter + shape.cabinLength / 2;
   const back = shape.cabinCenter - shape.cabinLength / 2;
   const isCargo = shape.extra === "cargo";
-  const glassLength = isCargo ? 1.9 : shape.cabinLength - 0.1;
-  const glassCenter = isCargo ? front - glassLength / 2 : shape.cabinCenter;
+  const glass = glassSpan(shape);
+  const glassHeight = cabinHeight - 0.1;
+  const glassY = shape.beltline + glassHeight / 2;
   const pillarZs = [front - 0.05, back + 0.05];
   if (shape.rearDoors) pillarZs.push(shape.cabinCenter + 0.05);
-  if (isCargo) pillarZs.push(front - glassLength);
+  if (isCargo) pillarZs.push(front - glass.length);
+  // Side glass that isn't part of a door (rear quarter windows); door windows swing out with their doors.
+  const sidePanels = ([1, -1] as const).flatMap((side) => {
+    const doorSpans = availableSeats(shape)
+      .filter((seat) => seatLayout(shape, seat)!.side === side)
+      .map((seat) => doorWindowSpan(shape, seat))
+      .filter((span) => span !== undefined)
+      .sort((a, b) => a.back - b.back);
+    const panels: { side: 1 | -1; back: number; front: number }[] = [];
+    let cursor = glass.back;
+    for (const span of doorSpans) {
+      if (span.back - cursor > 0.15) panels.push({ side, back: cursor, front: span.back });
+      cursor = Math.max(cursor, span.front);
+    }
+    if (glass.front - cursor > 0.15) panels.push({ side, back: cursor, front: glass.front });
+    return panels;
+  });
   return (
     <>
       <Part geometry={shapes.box(cabinWidth, 0.14, shape.cabinLength, 0.07)} color={color} position={[0, shape.roof - 0.07, shape.cabinCenter]} />
-      <Part
-        geometry={shapes.box(cabinWidth - 0.04, cabinHeight - 0.1, glassLength, 0.05)}
-        color={GLASS}
-        opacity={0.38}
-        position={[0, shape.beltline + (cabinHeight - 0.1) / 2, glassCenter]}
-        outline={false}
-        shadow={false}
-      />
+      {/* Windshield and rear window. */}
+      <Part geometry={shapes.box(cabinWidth - 0.04, glassHeight, 0.05, 0.02)} color={GLASS} opacity={0.38} position={[0, glassY, glass.front - 0.03]} outline={false} shadow={false} />
+      {!isCargo && (
+        <Part geometry={shapes.box(cabinWidth - 0.04, glassHeight, 0.05, 0.02)} color={GLASS} opacity={0.38} position={[0, glassY, glass.back + 0.03]} outline={false} shadow={false} />
+      )}
+      {sidePanels.map((panel) => (
+        <Part
+          key={`${panel.side}-${panel.back}`}
+          geometry={shapes.box(0.04, glassHeight, panel.front - panel.back, 0.015)}
+          color={GLASS}
+          opacity={0.38}
+          position={[panel.side * (cabinWidth / 2 - 0.04), glassY, (panel.front + panel.back) / 2]}
+          outline={false}
+          shadow={false}
+        />
+      ))}
       {isCargo && (
         <Part
-          geometry={shapes.box(cabinWidth, cabinHeight - 0.08, shape.cabinLength - glassLength, 0.05)}
+          geometry={shapes.box(cabinWidth, cabinHeight - 0.08, shape.cabinLength - glass.length, 0.05)}
           color={color}
-          position={[0, shape.beltline + (cabinHeight - 0.08) / 2, back + (shape.cabinLength - glassLength) / 2]}
+          position={[0, shape.beltline + (cabinHeight - 0.08) / 2, back + (shape.cabinLength - glass.length) / 2]}
         />
       )}
       {pillarZs.flatMap((z) =>
@@ -144,18 +188,43 @@ const Cabin = ({ shape, color }: { shape: CarShape; color: string }) => {
   );
 };
 
-const FrontAndBack = ({ shape, night }: { shape: CarShape; night?: boolean }) => {
+/** Steering wheel in front of the driver's seat, tilted toward them (seen through the windows). */
+const SteeringWheel = ({ shape }: { shape: CarShape }) => {
+  const driver = seatLayout(shape, "driver");
+  if (!driver) return null;
+  return (
+    <group position={[driver.seat[0], shape.beltline + 0.06, driver.seat[1] + 0.5]} rotation={[0.55, 0, 0]}>
+      <Part geometry={shapes.torus(0.16, 0.025)} color="#1d1b26" outline={false} />
+      <Part geometry={shapes.box(0.3, 0.035, 0.03, 0.01)} color="#1d1b26" outline={false} />
+      <Part geometry={shapes.cylinder(0.025, 0.025, 0.3, 8)} color="#1d1b26" position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]} outline={false} />
+    </group>
+  );
+};
+
+const FrontAndBack = ({ shape, night, braking }: { shape: CarShape; night?: boolean; braking?: boolean }) => {
   const front = shape.length / 2;
   const lampY = shape.bodyBottom + (shape.beltline - shape.bodyBottom) * 0.62;
   const bumperY = shape.bodyBottom + 0.08;
+  // Brake lights: bright red with a soft glow, plus the third light up at the rear window.
+  const tailColor = braking ? "#ff4d4d" : "#b5172b";
+  const tailGlow = braking ? "#ff1a1a" : night ? "#9d0208" : undefined;
+  const thirdLightZ = shape.extra === "pickup-bed" || shape.extra === "dump-bed" || shape.extra === "cargo"
+    ? undefined
+    : shape.cabinCenter - shape.cabinLength / 2 + 0.06;
   return (
     <>
       {[1, -1].map((side) => (
         <group key={side}>
           <Part geometry={shapes.sphere(0.12)} color="#fffbe6" emissive={night ? "#fff3b0" : undefined} position={[side * shape.width * 0.32, lampY, front - 0.02]} scale={[1.2, 0.85, 0.5]} />
-          <Part geometry={shapes.box(0.3, 0.12, 0.06, 0.03)} color="#ef233c" emissive={night ? "#9d0208" : undefined} position={[side * shape.width * 0.33, lampY, -front + 0.01]} />
+          <Part geometry={shapes.box(0.3, 0.12, 0.06, 0.03)} color={tailColor} emissive={tailGlow} position={[side * shape.width * 0.33, lampY, -front + 0.01]} />
+          {braking && (
+            <Part geometry={shapes.sphere(0.3)} color="#ff3030" emissive="#ff1a1a" opacity={0.28} position={[side * shape.width * 0.33, lampY, -front - 0.04]} scale={[1.2, 0.7, 0.25]} outline={false} shadow={false} />
+          )}
         </group>
       ))}
+      {thirdLightZ !== undefined && (
+        <Part geometry={shapes.box(0.36, 0.05, 0.04, 0.015)} color={tailColor} emissive={braking ? "#ff1a1a" : undefined} position={[0, shape.roof - 0.17, thirdLightZ]} outline={false} shadow={false} />
+      )}
       <Part geometry={shapes.box(shape.width * 0.36, 0.14, 0.05, 0.03)} color={TRIM} position={[0, lampY - 0.04, front + 0.0]} outline={0.012} />
       <Part geometry={shapes.box(shape.width * 0.98, 0.14, 0.18, 0.06)} color={TRIM} position={[0, bumperY, front - 0.02]} />
       <Part geometry={shapes.box(shape.width * 0.98, 0.14, 0.18, 0.06)} color={TRIM} position={[0, bumperY, -front + 0.02]} />
@@ -163,15 +232,34 @@ const FrontAndBack = ({ shape, night }: { shape: CarShape; night?: boolean }) =>
   );
 };
 
-const Door = ({ shape, seat, color, openness }: { shape: CarShape; seat: SeatName; color: string; openness: number }) => {
+const Door = ({ shape, seat, color, openness, insideView }: { shape: CarShape; seat: SeatName; color: string; openness: number; insideView?: boolean }) => {
   const layout = seatLayout(shape, seat)!;
   const height = (shape.beltline - shape.bodyBottom) * 0.86;
   const hingeZ = layout.door.centerZ + layout.door.length / 2;
   const openAngle = openness * 1.15 * -layout.side;
+  const groupX = layout.side * (shape.width / 2 + 0.02);
+  const groupY = shape.bodyBottom + height / 2 + 0.06;
+  // The door's window (glass in a thin frame) sits up at the cabin's side and swings out with the door.
+  const window = insideView ? undefined : doorWindowSpan(shape, seat);
+  const cabinX = layout.side * (shape.width * 0.44 - 0.04);
+  const glassHeight = shape.roof - shape.beltline - 0.1;
+  const glassY = shape.beltline + glassHeight / 2 - groupY;
   return (
-    <group position={[layout.side * (shape.width / 2 + 0.02), shape.bodyBottom + height / 2 + 0.06, hingeZ]} rotation={[0, openAngle, 0]}>
+    <group position={[groupX, groupY, hingeZ]} rotation={[0, openAngle, 0]}>
       <Part geometry={shapes.box(0.07, height, layout.door.length, 0.03)} color={color} position={[0, 0, -layout.door.length / 2]} outline={0.014} />
       <Part geometry={shapes.box(0.05, 0.04, 0.16, 0.015)} color={TRIM} position={[layout.side * 0.04, height * 0.25, -layout.door.length + 0.18]} outline={false} />
+      {window && (
+        <group position={[cabinX - groupX, glassY, (window.front + window.back) / 2 - hingeZ]}>
+          <Part geometry={shapes.box(0.04, glassHeight, window.front - window.back, 0.015)} color={GLASS} opacity={0.38} outline={false} shadow={false} />
+          {openness > 0.02 && (
+            <>
+              {/* Frame edges only show once the door leaves the body (closed, the pillars and roof cover them). */}
+              <Part geometry={shapes.box(0.05, 0.05, window.front - window.back, 0.015)} color={color} position={[0, glassHeight / 2, 0]} outline={0.008} />
+              <Part geometry={shapes.box(0.05, glassHeight, 0.05, 0.015)} color={color} position={[0, 0, -(window.front - window.back) / 2]} outline={0.008} />
+            </>
+          )}
+        </group>
+      )}
     </group>
   );
 };

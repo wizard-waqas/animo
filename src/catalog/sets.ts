@@ -85,4 +85,5 @@ export const PROP_BOUNDS: Record<PropSpec["type"], { radius: number; height: num
   dashcam: { radius: 0.12, height: 0.21 },
   bump: { radius: 0.4, height: 0.13 },
   porch: { radius: 0.2, height: 2.7 },
+  "traffic-light": { radius: 0.3, height: 6.2 },
 };

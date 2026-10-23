@@ -213,10 +213,15 @@ export const sound = (name: SoundName, opts: { at?: Vec3; volume?: number } = {}
 /**
  * Extra set dressing. `y` lifts it (a mug on a table), `set` limits it to one location, `from` makes it appear at a
  * time or when a cue ends: prop("mug", [1, 2], { y: 0.72, from: { cue: "set-down", delay: -0.6 } }).
+ * A traffic-light stands on the right shoulder with its arm reaching 7m toward -X local (facing 270 → over the
+ * lanes for traffic heading +X); it shows red until `green` (a time or a cue).
  */
 export const prop = (
   type: PropSpec["type"], at: Vec2,
-  opts: { facing?: number; scale?: number; color?: string; y?: number; set?: SetName; from?: number | { cue: string; delay?: number } } = {},
+  opts: {
+    facing?: number; scale?: number; color?: string; y?: number; set?: SetName;
+    from?: number | { cue: string; delay?: number }; green?: number | { cue: string; delay?: number };
+  } = {},
 ) => ({ type, at, ...opts });
 
 /** Hard cut to another location (set). Pair it with a camera cut at the same moment. Actors/props tagged `set` follow. */

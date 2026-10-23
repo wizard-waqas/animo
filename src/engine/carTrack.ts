@@ -26,6 +26,8 @@ export interface CarState {
   dashcamTug: number;
   /** Mud splats stuck on the car (indexes into mudSpots(shape)), with how long ago each landed. */
   mud: { spot: number; age: number }[];
+  /** Brake lights on: slowing down, or held at a stop with someone at the wheel. */
+  braking: boolean;
 }
 
 type DriveSegment = {
@@ -68,6 +70,8 @@ export class CarTrack {
   /** Drives that start a parked car at an explicit speed (it "enters" moving, usually off screen). */
   readonly launches: number[] = [];
   private springs: { pitch: Float32Array; roll: Float32Array; heave: Float32Array } | null = null;
+  /** Is anyone in the driver's seat at time t? Set by the compiler once the people are planned. */
+  driverIn: (t: number) => boolean = () => false;
   /** Latest time another actor's planning has looked at where this car is. */
   private readUntil = -Infinity;
 
@@ -327,7 +331,24 @@ export class CarTrack {
       siren: this.sirenOn(t),
       dashcamTug: this.dashcamTugs.some((tug) => t >= tug.start && t <= tug.end) ? 1 : 0,
       mud: this.mudAt(t),
+      braking: this.braking(t),
     };
+  }
+
+  /**
+   * Brake lights: on while slowing down (and for a moment after, so they don't flicker), and while
+   * stopped between drives with a driver aboard (waiting at a light). Parked cars and empty cars stay dark.
+   */
+  braking(t: number) {
+    const slowing = (time: number) => {
+      const { speed, acceleration } = this.derivatives(time);
+      return Math.abs(speed) > 0.05 && acceleration * Math.sign(speed) < -0.8;
+    };
+    if ([0, 0.1, 0.2, 0.3].some((ago) => t - ago > 0 && slowing(t - ago))) return true;
+    if (Math.abs(this.derivatives(t).speed) > 0.05) return false;
+    const drove = this.drives.some((drive) => drive.kind === "path" && drive.start < t);
+    const drivesAgain = this.drives.some((drive) => drive.start > t);
+    return drove && drivesAgain && this.driverIn(t);
   }
 
   /** Convert a local [x, z] point on this car to world [x, z] at time t. */

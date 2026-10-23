@@ -55,7 +55,7 @@ const Leg = ({ side, hip, knee, look }: { side: 1 | -1; hip: number; knee: numbe
   </group>
 );
 
-const Arm = ({ side, shoulderX, shoulderZ, elbow, look, item }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; item?: "phone" | "mug" }) => (
+const Arm = ({ side, shoulderX, shoulderZ, elbow, look, item }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; item?: "phone" | "mug" | "finger" }) => (
   <group position={[side * RIG.shoulderSpacing * look.build, RIG.shoulderHeight - 0.03, 0]} rotation={[-shoulderX, 0, side * shoulderZ]}>
     <Part geometry={shapes.limb(0.068, RIG.upperArm)} color={look.shirt} />
     <group position={[0, -RIG.upperArm + 0.02, 0]} rotation={[-elbow, 0, 0]}>
@@ -63,6 +63,7 @@ const Arm = ({ side, shoulderX, shoulderZ, elbow, look, item }: { side: 1 | -1; 
       <Part geometry={shapes.sphere(0.075)} color={look.skin} position={[0, -RIG.lowerArm, 0]} />
       {item === "phone" && <Phone />}
       {item === "mug" && <Mug upright={shoulderX + elbow} />}
+      {item === "finger" && <Part geometry={shapes.capsule(0.034, 0.13)} color={look.skin} position={[0, -RIG.lowerArm - 0.14, 0.01]} outline={0.008} />}
     </group>
   </group>
 );

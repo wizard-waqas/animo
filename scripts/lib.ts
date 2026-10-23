@@ -135,8 +135,12 @@ let gl: Gl = (process.env.TOON_GL as Gl | undefined) ?? (process.platform === "l
 // Remotion's downloaded headless Chrome crashes with GPU WebGL on Apple Silicon ("browser has disconnected"),
 // while the regular Chrome app renders fine and fast. So on a Mac, use the installed Chrome when there is one.
 const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// The cloud container ships Playwright's headless shell and can't reach Remotion's download host.
+const CLOUD_CHROME = "/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell";
 const browserExecutable =
-  process.env.TOON_BROWSER ?? (process.platform === "darwin" && existsSync(MAC_CHROME) ? MAC_CHROME : null);
+  process.env.TOON_BROWSER
+  ?? (process.platform === "darwin" && existsSync(MAC_CHROME) ? MAC_CHROME : null)
+  ?? (process.platform === "linux" && existsSync(CLOUD_CHROME) ? CLOUD_CHROME : null);
 
 export const browserOptions = () => ({
   browserExecutable,
