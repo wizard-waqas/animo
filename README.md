@@ -76,7 +76,8 @@ locally.
    ```bash
    npm run render -- pickup-friend --preview
    ```
-   The first render downloads a headless Chrome (about 170MB) automatically. The video lands in
+   On a Mac with Google Chrome installed, it renders with that. Otherwise the first render downloads a headless
+   Chrome (about 170MB) automatically. The video lands in
    `out/pickup-friend/preview.mp4`.
 
 To preview in the browser instead and scrub through clips, run `npm run studio`.
@@ -93,21 +94,11 @@ npm run render -- <scene> --from 20 --to 35  # just a slice (seconds or a cue na
 Render prints frames done, speed and time left every few seconds. Each render first records any new voice
 lines, then builds the soundtrack.
 
-**Mac: if the render crashes** with "Navigation failed because browser has disconnected", or sits at 0 frames,
-render with your installed Chrome instead of the downloaded one. Put `TOON_BROWSER=...` at the start of the command:
-
-```bash
-TOON_BROWSER="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npm run render -- brake-check
-```
-
-To skip typing it every time, add that line (without `npm run ...`) to `.env.local`:
-
-```
-TOON_BROWSER=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-```
-
-Without it, Animo retries a crash once with software graphics (works, but slower). To pick the graphics mode
-yourself, set `TOON_GL=angle` (GPU) or `TOON_GL=swangle` (software).
+**On a Mac, Animo renders with your installed Google Chrome** (`/Applications/Google Chrome.app`) when it's
+there. Remotion's own downloaded Chrome crashes with "browser has disconnected" on Apple Silicon. No Chrome
+installed? Install it, or point `TOON_BROWSER` at another Chrome/Chromium (in `.env.local` or before the command).
+If the browser still crashes, Animo retries once with software graphics (works, but slower). To pick the graphics
+mode yourself, set `TOON_GL=angle` (GPU) or `TOON_GL=swangle` (software).
 
 **Long clips: render one part at a time.** `--from` and `--to` take seconds or a cue name (the names in
 `.as("...")` in the scene file; `npm run inspect -- <scene>` lists them as `#name`). A cue name keeps the cut in

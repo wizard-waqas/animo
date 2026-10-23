@@ -38,8 +38,14 @@ export const parseArgs = (argv = process.argv.slice(2)) => {
 type Gl = "swangle" | "angle";
 let gl: Gl = (process.env.TOON_GL as Gl | undefined) ?? (process.platform === "linux" ? "swangle" : "angle");
 
+// Remotion's downloaded headless Chrome crashes with GPU WebGL on Apple Silicon ("browser has disconnected"),
+// while the regular Chrome app renders fine and fast. So on a Mac, use the installed Chrome when there is one.
+const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const browserExecutable =
+  process.env.TOON_BROWSER ?? (process.platform === "darwin" && existsSync(MAC_CHROME) ? MAC_CHROME : null);
+
 export const browserOptions = () => ({
-  browserExecutable: process.env.TOON_BROWSER ?? null,
+  browserExecutable,
   chromiumOptions: { gl },
 });
 
@@ -53,7 +59,7 @@ export const openComposition = async (options: { serveUrl: string; id: string; i
   } catch (error) {
     if (process.env.TOON_GL || gl === "swangle") throw error;
     console.log(`  Browser crashed with gl=${gl} (${(error as Error).message}). Retrying with software WebGL (slower).`);
-    console.log("  To skip this next time: TOON_GL=swangle, or point TOON_BROWSER at your installed Chrome.");
+    console.log("  Installing Google Chrome (or pointing TOON_BROWSER at another Chrome) usually avoids this.");
     gl = "swangle";
     return selectComposition({ ...options, ...browserOptions() });
   }
