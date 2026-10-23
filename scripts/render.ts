@@ -1,8 +1,8 @@
 import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
+import { renderMedia } from "@remotion/renderer";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { browserOptions, findScene, parseArgs } from "./lib";
+import { browserOptions, findScene, openComposition, parseArgs } from "./lib";
 import { generateSound } from "./sound";
 import { recordVoices } from "./voices";
 
@@ -26,7 +26,7 @@ const started = Date.now();
 await recordVoices(spec);
 generateSound(spec, { quiet: true });
 const serveUrl = await bundle({ entryPoint: path.resolve("src/index.ts"), onProgress: () => undefined });
-const composition = await selectComposition({ serveUrl, id: spec.id, inputProps, ...browserOptions() });
+const composition = await openComposition({ serveUrl, id: spec.id, inputProps });
 const scale = flags.scale ? Number(flags.scale) : preview ? 0.5 : 1;
 const scaledWidth = composition.width * scale;
 const scaledHeight = composition.height * scale;

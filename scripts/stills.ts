@@ -1,9 +1,9 @@
 import { bundle } from "@remotion/bundler";
-import { renderStill, selectComposition } from "@remotion/renderer";
+import { renderStill } from "@remotion/renderer";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
-import { browserOptions, findScene, parseArgs } from "./lib";
+import { browserOptions, findScene, openComposition, parseArgs } from "./lib";
 import { generateSound } from "./sound";
 
 /**
@@ -28,7 +28,7 @@ const started = Date.now();
 generateSound(spec, { quiet: true });
 const serveUrl = await bundle({ entryPoint: path.resolve("src/index.ts"), onProgress: () => undefined });
 const inputProps = { sceneId: spec.id, debug, preview: false };
-const composition = await selectComposition({ serveUrl, id: spec.id, inputProps, ...browserOptions() });
+const composition = await openComposition({ serveUrl, id: spec.id, inputProps });
 
 const tiles: PNG[] = [];
 for (const time of times) {
