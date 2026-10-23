@@ -35,6 +35,8 @@ export interface CompiledScene {
   soundCues: SoundCue[];
   zaps: Zap[];
   timeline: TimelineRow[];
+  /** Named entries (`.as("cue")`) with when they start and end. */
+  cues: Record<string, { start: number; end: number }>;
   warnings: string[];
 }
 
@@ -115,6 +117,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   const lastEnd: Record<string, number> = {};
   const lastStart: Record<string, number> = {};
   const cueEnd: Record<string, number> = {};
+  const cues: CompiledScene["cues"] = {};
   for (const entry of spec.timeline) {
     if (!entry.id) continue;
     if (spec.cast[entry.id] || entry.id === "camera" || entry.id === "overlay" || entry.id === "sound") throw new Error(`Cue name "${entry.id}" clashes with an actor id`);
@@ -399,7 +402,10 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     const label = entry.id ? `${actionLabel}  #${entry.id}` : actionLabel;
     if (!layered) lastStart[actor] = start;
     lastEnd[actor] = end;
-    if (entry.id) cueEnd[entry.id] = end;
+    if (entry.id) {
+      cueEnd[entry.id] = end;
+      cues[entry.id] = { start, end };
+    }
     timeline.push({ actor, label, start, end });
     // Driving out of shot past the end is normal; anything else running long is probably a timing mistake.
     if (end > spec.duration + 1e-6 && entry.action.type !== "drive") warnings.push(`${actor}: "${label}" ends at ${fmt(end)}s, after the scene ends (${spec.duration}s)`);
@@ -416,7 +422,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   warnings.push(...findCollisions(spec.duration, cars, characters));
 
   timeline.sort((a, b) => a.start - b.start || a.actor.localeCompare(b.actor));
-  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, zaps, timeline, warnings };
+  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, zaps, timeline, cues, warnings };
 };
 
 export const evaluateScene = (scene: CompiledScene, realTime: number): FrameState => {
