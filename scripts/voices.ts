@@ -5,7 +5,7 @@ import { SAMPLE_RATE, decodeWav, encodeMonoWav } from "../src/audio/dsp";
 import { compileScene } from "../src/engine/compile";
 import type { Mood } from "../src/engine/expression";
 import type { SceneSpec } from "../src/engine/spec";
-import { ENVELOPE_RATE, deliveryTags, encodeEnvelope, stripTags } from "../src/voice/lines";
+import { ENVELOPE_RATE, deliveryTags, encodeEnvelope, registerVoiceClips, stripTags } from "../src/voice/lines";
 import { type VoiceProvider, resolveVoice } from "../src/voice/voices";
 import { VOICE_CLIPS, type VoiceClip } from "../voices/manifest";
 import { findScene, parseArgs } from "./lib";
@@ -151,6 +151,8 @@ export const recordVoices = async (spec: SceneSpec, options: { force?: boolean }
     writeFileSync(path.resolve("voices", file), encodeMonoWav(samples));
     clips[line.key] = { file, duration: Math.round((samples.length / SAMPLE_RATE) * 1000) / 1000, envelope: envelopeOf(samples), provider, voice, text: line.script };
     writeManifest(clips);
+    // The manifest import is fixed at startup; register the new take so this process (render → sound) uses it too.
+    registerVoiceClips({ [line.key]: clips[line.key] });
     console.log(`${clips[line.key].duration}s`);
   }
   const recorded = missing.length - failed;
