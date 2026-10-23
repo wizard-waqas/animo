@@ -20,6 +20,8 @@ export interface CharacterState {
   face?: Face;
   /** 0..1 mouth opening from speech (lip sync). */
   talk?: number;
+  /** Item in the right hand (phone during film / phone-call). */
+  item?: "phone";
   /** Walking/running/turning-step info (distance in rig units), used to place footstep sounds. */
   gait?: { distance: number; run: boolean; weight: number };
 }
@@ -294,7 +296,7 @@ export class CharacterTrack {
         base = { ...base, pose: blendPose(segment.fromPose, base.pose, weight * weight * (3 - 2 * weight)) };
       }
     } else base = this.evaluateRest(this.restAt(t), t);
-    return { ...base, pose: this.applyGestures(base.pose, t), face: this.face(t), talk: this.talkLevel(t) };
+    return { ...base, pose: this.applyGestures(base.pose, t), face: this.face(t), talk: this.talkLevel(t), item: this.itemAt(t) };
   }
 
   private evaluateRest(rest: RestState, t: number): CharacterState {
@@ -399,6 +401,16 @@ export class CharacterTrack {
       result = blendPose(result, gesturePose, envelope(localTime, duration), gestureKeys(gesture.clip));
     }
     return result;
+  }
+
+  /** The hand item shows while its gesture is mostly raised, so it doesn't pop in at the hip. */
+  private itemAt(t: number) {
+    for (const gesture of this.gestures) {
+      const item = clipDefinition(gesture.clip).item;
+      if (!item || t < gesture.start || t > gesture.end) continue;
+      if (envelope(t - gesture.start, gesture.end - gesture.start) > 0.4) return item;
+    }
+    return undefined;
   }
 
   private segmentAt(t: number) {
