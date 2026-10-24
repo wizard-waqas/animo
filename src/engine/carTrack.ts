@@ -28,6 +28,8 @@ export interface CarState {
   mud: { spot: number; age: number }[];
   /** Brake lights on: slowing down, or held at a stop with someone at the wheel. */
   braking: boolean;
+  /** Tipped over onto its side (radians around the forward axis, positive = onto its left / +X side). */
+  tilt: number;
 }
 
 type DriveSegment = {
@@ -47,6 +49,11 @@ type DriveSegment = {
 );
 
 interface Hop { start: number; end: number; height: number; sound: "boing" | "thud" }
+/** Falling over onto one side (a kicked motorcycle): `side` +1 = its left (+X), -1 = its right. */
+export interface Tip { start: number; duration: number; side: 1 | -1 }
+
+/** How far a tipped motorcycle ends up leaning: lying on its side, propped by the handlebar and pegs. */
+const TIPPED_ANGLE = 1.3;
 export interface Impact { time: number; speed: number; /** World direction of the force on this car. */ direction: Vec2 }
 export interface Honk { start: number; duration: number; times: number }
 interface DoorEvent { door: SeatName; start: number; duration: number; open: boolean }
@@ -69,6 +76,7 @@ export class CarTrack {
   readonly mudTimes = new Map<number, number>();
   /** Drives that start a parked car at an explicit speed (it "enters" moving, usually off screen). */
   readonly launches: number[] = [];
+  readonly tips: Tip[] = [];
   private springs: { pitch: Float32Array; roll: Float32Array; heave: Float32Array } | null = null;
   /** Is anyone in the driver's seat at time t? Set by the compiler once the people are planned. */
   driverIn: (t: number) => boolean = () => false;
@@ -159,6 +167,38 @@ export class CarTrack {
       fromPos: current.pos, toPos: add2(current.pos, offset), fromHeading: current.heading, toHeading: current.heading + spin,
     });
     return start + duration;
+  }
+
+  /**
+   * Falls over onto one side and slides to a stop along its heading (decelerating at `slideDecel` m/s²).
+   * Returns when it lands on its side.
+   */
+  addTip(start: number, side: 1 | -1, options: { fall?: number; slideDecel?: number; spin?: number } = {}) {
+    this.assertUnread(start, "tip over");
+    const fall = options.fall ?? 0.55;
+    const speed = this.speedAt(start);
+    const decel = options.slideDecel ?? 4;
+    if (speed > 0.3) {
+      const { heading } = this.kinematics(start);
+      const slide = (speed * speed) / (2 * decel);
+      // The shove's cubic "out" easing starts at 3·distance/duration, so this duration keeps the speed continuous.
+      this.addShove(start, scale2(forwardOf(heading), slide), options.spin ?? 0, (3 * slide) / speed);
+    }
+    this.tips.push({ start, duration: fall, side });
+    return start + fall;
+  }
+
+  tiltAt(t: number) {
+    let tilt = 0;
+    for (const tip of this.tips) {
+      if (t < tip.start) continue;
+      const u = clamp((t - tip.start) / tip.duration, 0, 1);
+      // Gravity: slow start, fast finish, then a small bounce off the ground.
+      const after = t - tip.start - tip.duration;
+      const bounce = after > 0 ? 0.08 * Math.exp(-after * 7) * Math.sin(after * 22) : 0;
+      tilt = tip.side * (TIPPED_ANGLE * u * u - bounce);
+    }
+    return tilt;
   }
 
   /** Lights on/off; `sound` false keeps the lights flashing with the siren silent. */
@@ -332,6 +372,7 @@ export class CarTrack {
       dashcamTug: this.dashcamTugs.some((tug) => t >= tug.start && t <= tug.end) ? 1 : 0,
       mud: this.mudAt(t),
       braking: this.braking(t),
+      tilt: this.tiltAt(t),
     };
   }
 

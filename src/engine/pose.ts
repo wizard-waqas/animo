@@ -6,6 +6,7 @@ import { clamp, clamp01, lerp } from "./math";
  * - *ShoulderX / *HipX: positive swings the limb forward.
  * - *ShoulderZ: positive raises the arm out to the side (both arms).
  * - *Elbow / *Knee: positive bends (elbow forward, knee backward).
+ * - *ArmTwist: turns the upper arm so the elbow bends inward across the body instead of forward (π/2 = hand on hip).
  * - headX: positive looks down. headY: positive looks to the character's left. spineX: positive leans forward.
  * - rootY: vertical offset of the whole body in meters (unscaled). squash: vertical scale for cartoon squash & stretch.
  */
@@ -23,6 +24,8 @@ export interface Pose {
   rShoulderX: number;
   rShoulderZ: number;
   rElbow: number;
+  lArmTwist: number;
+  rArmTwist: number;
   lHipX: number;
   lKnee: number;
   rHipX: number;
@@ -32,14 +35,14 @@ export interface Pose {
 
 export const NEUTRAL_POSE: Pose = {
   rootY: 0, spineX: 0, spineY: 0, spineZ: 0, headX: 0, headY: 0, headZ: 0,
-  lShoulderX: 0, lShoulderZ: 0.08, lElbow: 0.15, rShoulderX: 0, rShoulderZ: 0.08, rElbow: 0.15,
+  lShoulderX: 0, lShoulderZ: 0.08, lElbow: 0.15, rShoulderX: 0, rShoulderZ: 0.08, rElbow: 0.15, lArmTwist: 0, rArmTwist: 0,
   lHipX: 0, lKnee: 0, rHipX: 0, rKnee: 0, squash: 1,
 };
 
 const POSE_KEYS = Object.keys(NEUTRAL_POSE) as (keyof Pose)[];
 export const UPPER_BODY_KEYS: (keyof Pose)[] = [
   "spineX", "spineY", "spineZ", "headX", "headY", "headZ",
-  "lShoulderX", "lShoulderZ", "lElbow", "rShoulderX", "rShoulderZ", "rElbow",
+  "lShoulderX", "lShoulderZ", "lElbow", "rShoulderX", "rShoulderZ", "rElbow", "lArmTwist", "rArmTwist",
 ];
 
 export const withPose = (overrides: Partial<Pose>): Pose => ({ ...NEUTRAL_POSE, ...overrides });
@@ -75,6 +78,12 @@ export const idlePose = (time: number): Pose =>
 export const SIT_POSE: Pose = withPose({
   lHipX: 1.4, rHipX: 1.4, lKnee: 0.45, rKnee: 0.45,
   lShoulderX: 0.7, rShoulderX: 0.7, lElbow: 0.9, rElbow: 0.9, lShoulderZ: 0.15, rShoulderZ: 0.15,
+});
+
+/** Riding a motorcycle: leaning in, knees bent onto the pegs, hands forward on the handlebar. */
+export const RIDE_POSE: Pose = withPose({
+  spineX: 0.3, headX: -0.25, lHipX: 0.9, rHipX: 0.9, lKnee: 1.5, rKnee: 1.5,
+  lShoulderX: 0.85, rShoulderX: 0.85, lElbow: 0.35, rElbow: 0.35, lShoulderZ: 0.2, rShoulderZ: 0.2,
 });
 
 // ---------------------------------------------------------------------------
@@ -145,7 +154,10 @@ export interface ClipDefinition {
   itemUntil?: number;
 }
 
-export type HandItem = "phone" | "mug" | "check" | "finger";
+export type HandItem = "phone" | "mug" | "check" | "finger" | "peace";
+
+/** Fraction of the "kick" clip where the foot connects (the kick-over action lines this up with the target). */
+export const KICK_CONTACT = 0.4;
 
 /** smack-wheel slams per second; the hands hit the wheel at start + k / SMACK_RATE (k ≥ 1). */
 export const SMACK_RATE = 2.2;
@@ -457,6 +469,31 @@ export const CLIPS = {
         headX: -0.35 + 0.1 * Math.abs(wave(t, 3.2)), spineX: -0.12 + 0.06 * Math.abs(wave(t, 3.2)), headZ: 0.05 * wave(t, 1.3),
       });
     },
+  },
+  kick: {
+    layer: "body", defaultDuration: 0.9, description: "Big front kick with the right leg (lands at 40%), arms out for balance",
+    pose: (t, d) => {
+      const u = clamp01(t / d);
+      const smooth = (x: number) => x * x * (3 - 2 * x);
+      // Chamber the knee, snap the leg out at contact, hold a beat, put the foot back down.
+      const chamber = smooth(clamp01(u / 0.28));
+      const snap = smooth(clamp01((u - 0.28) / (KICK_CONTACT - 0.28)));
+      const back = smooth(clamp01((u - 0.6) / 0.4));
+      const lift = chamber * (1 - back);
+      return withPose({
+        rHipX: (0.9 * chamber + 0.55 * snap) * (1 - back), rKnee: (1.5 * chamber - 1.4 * snap) * (1 - back),
+        lKnee: 0.25 * lift, spineX: -0.28 * lift, headX: 0.12 * lift, rootY: -0.03 * lift,
+        lShoulderZ: 0.1 + 1.0 * lift, rShoulderZ: 0.1 + 0.8 * lift, lElbow: 0.3 + 0.4 * lift, rElbow: 0.3 + 0.4 * lift,
+      });
+    },
+  },
+  "peace-sign": {
+    layer: "gesture", defaultDuration: 2.5, description: "Peace sign held up by the face with the right hand, head tilted", item: "peace",
+    pose: (t) => withPose({ rShoulderX: 0.75, rShoulderZ: 0.5, rElbow: 2.0, headZ: -0.18 + 0.03 * wave(t, 1.5), headX: -0.05 }),
+  },
+  "hand-on-hip": {
+    layer: "gesture", defaultDuration: 2.5, description: "Sassy: left hand on the hip, elbow out, hip popped",
+    pose: () => withPose({ lShoulderX: -0.1, lShoulderZ: 0.6, lArmTwist: Math.PI / 2, lElbow: 1.4, spineZ: 0.08, headZ: 0.06 }),
   },
   "sit-ground": {
     layer: "body", defaultDuration: 3, description: "Sits down cross-legged-ish on the ground",

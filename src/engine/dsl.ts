@@ -93,6 +93,11 @@ export const character = (id: string, model: CharacterModel, options: CharacterO
    * down until their next action — use target.play("get-up")).
    */
   tase: (target: ActorRef, opts: { duration?: number } = {}): ActionInput => ({ type: "tase", actor: id, target: idOf(target), ...opts }),
+  /**
+   * Kick a motorcycle over as it rides past (stand ~1m beside its path). Waits for it to come level, kicks;
+   * it tips and slides, and the rider is thrown and lies flat (use rider.play("get-up")).
+   */
+  kickOver: (bike: ActorRef): ActionInput => ({ type: "kick-over", actor: id, car: idOf(bike) }),
   /** Lean into a car's open driver door and yank at its dashcam (it rattles on its mount). Stand at the door first. */
   yankDashcam: (vehicle: ActorRef, opts: { duration?: number } = {}): ActionInput => ({ type: "yank-dashcam", actor: id, car: idOf(vehicle), ...opts }),
   /** Change facial expression: neutral, happy, angry, scared, shocked, smug, sad, pain, dazed. Blends in over 0.25s. */

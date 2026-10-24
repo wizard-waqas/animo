@@ -191,7 +191,8 @@ export default scene({
   sad, pain (wince), dazed (eyes shut). Blend over 0.25s. Bubbles go red/shaky when angry, wobbly when scared.
 - Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call, film,
   yell, arms-crossed, hold-neck, shove, cuffed, hands-up, punch (a smack sound every 0.4s), middle-finger, smack-wheel
-  (seated: laughing, slapping the wheel, with thuds). Body: jump, dance, sit-ground, fall-over, cower, stagger,
+  (seated: laughing, slapping the wheel, with thuds), peace-sign, hand-on-hip (layer the two for a sassy pose).
+  Body: kick, jump, dance, sit-ground, fall-over, cower, stagger,
   reach-in, tased, knocked-out (held), get-up. (`npm run catalog` is the source of truth.)
 
 ### Cars
@@ -212,6 +213,10 @@ export default scene({
   seat (parked/empty cars stay dark). Door windows swing out with their doors. Every car has a steering wheel.
 - `police` model: light bar + siren. `siren(true)` lights + wail, `siren(true, { sound: false })` lights only.
 - `path.arc(center, radius, fromDeg, toDeg, steps)` gives points for donuts / U-turns.
+- `motorcycle`: one rider (`seatedIn: { car: bike, seat: "driver" }`), straddle pose, higher engine buzz.
+  `kicker.kickOver(bike)`: the kicker (standing 0.7–1.5m beside the bike's path) waits for it, kicks as it comes
+  level ("WHAM!"), the bike tips away and slides to a stop on its side, the rider is thrown ahead (kicker's side)
+  and lies flat until `rider.play("get-up")`. Example: `scenes/fernando.scene.ts`.
 - `dump-truck` (dirt truck) + `truck.mudOnto(car)`: clumps arc off the back and land on the target's windshield,
   hood, bumper and roof (it can be moving), "SPLAT!", splat sounds; the mud stays. Car options `muddy: true` (starts
   dirty, same splat layout), `rearLabel` (tailgate text, readable in a zoomed dashcam replay). `hop({ sound: "thud" })`

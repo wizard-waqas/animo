@@ -1,12 +1,12 @@
-import { CARS, mudSpots } from "../catalog/cars";
+import { CARS, isBike, mudSpots } from "../catalog/cars";
 import { PROP_BOUNDS, SET_PROPS } from "../catalog/sets";
 import { CHARACTERS, type CharacterLook } from "../catalog/characters";
 import { type CameraState, CameraTrack } from "./cameraTrack";
 import { type CarState, CarTrack } from "./carTrack";
 import { type CharacterState, CharacterTrack, headHeight } from "./characterTrack";
 import { voiceIdentity } from "../voice/voices";
-import { clipDefinition } from "./pose";
-import { type Vec2, type Vec3, DEG, add2, clamp, distance2, headingOf, length2, rotate2, scale2, sub2 } from "./math";
+import { KICK_CONTACT, clipDefinition } from "./pose";
+import { type Vec2, type Vec3, DEG, add2, angleDelta, clamp, distance2, headingOf, length2, rotate2, scale2, sub2 } from "./math";
 import { type Action, type PropSpec, type SceneSpec, type SetName, type SoundName, type Target, FORMAT_SIZES } from "./spec";
 
 export interface TimelineRow { actor: string; label: string; start: number; end: number }
@@ -316,6 +316,73 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     return { end: lastLanding, label: `mud onto ${ontoId} (${spots.length} splats, landing ${fmt(firstLanding)}–${fmt(lastLanding)}s)` };
   };
 
+  /**
+   * Kick a passing motorcycle over: find when it comes level with the kicker, time the kick's contact to that
+   * moment, then tip the bike away from the kick (it slides to a stop on its side) and throw the rider off.
+   */
+  const planKickOver = (kickerId: string, bikeId: string, start: number) => {
+    const kicker = characters[kickerId];
+    const bike = cars[bikeId];
+    if (!bike || !isBike(bike.shape)) throw new Error(`${kickerId}.kickOver: "${bikeId}" is not a motorcycle in the cast`);
+    const kickerState = kicker.state(start);
+    const here: Vec2 = [kickerState.pos[0], kickerState.pos[2]];
+    const localAt = (t: number) => {
+      const { pos, heading } = bike.kinematics(t);
+      return rotate2(sub2(here, pos), -heading);
+    };
+    let contact: number | undefined;
+    for (let t = start; t < start + 30; t += 1 / 240) {
+      // The foot lands on the tank, just ahead of the rider.
+      if (localAt(t)[1] <= 0.3) {
+        contact = t;
+        break;
+      }
+    }
+    if (contact === undefined) throw new Error(`${kickerId}.kickOver(${bikeId}): ${bikeId} never rides past ${kickerId} after ${fmt(start)}s`);
+    if (localAt(contact)[1] < 0) throw new Error(`${kickerId}.kickOver(${bikeId}): ${bikeId} has already passed ${kickerId} at ${fmt(start)}s — get there earlier`);
+    const lateral = localAt(contact)[0];
+    if (Math.abs(lateral) > 1.6 || Math.abs(lateral) < 0.6) {
+      throw new Error(`${kickerId}.kickOver(${bikeId}): ${kickerId} is ${fmt(Math.abs(lateral))}m from ${bikeId}'s path — stand 0.7–1.5m beside it`);
+    }
+    const kickDuration = clipDefinition("kick").defaultDuration;
+    const kickStart = contact - KICK_CONTACT * kickDuration;
+    if (kickStart < start) throw new Error(`${kickerId}.kickOver(${bikeId}): ${bikeId} is already level with ${kickerId} at ${fmt(start)}s — start the kick earlier`);
+    const { pos: bikePos, heading } = bike.kinematics(contact);
+    // Square up to the bike just before kicking.
+    const facing = headingOf(sub2(bikePos, here));
+    const turnStart = Math.max(start, kickStart - 0.35);
+    if (Math.abs(angleDelta(kickerState.facing, facing)) > 10 * DEG) kicker.addTurn(turnStart, facing, kickStart - turnStart || 0.01);
+    const kickEnd = kicker.addClip(kickStart, "kick");
+
+    // Away from the kicker: kicked from its left (+X) it falls onto its right.
+    const side = lateral > 0 ? -1 : 1;
+    const away = rotate2([-Math.sign(lateral), 0], heading);
+    const speed = bike.speedAt(contact);
+    bike.addImpact(contact, Math.max(speed, 4), away);
+    const down = bike.addTip(contact, side, { slideDecel: 6, spin: side * 0.4 });
+    bike.markRead(contact);
+    soundCues.push({ time: contact, name: "thud", point: [bikePos[0], 0.7, bikePos[1]], volume: 0.9 });
+    soundCues.push({ time: down, name: "crash", point: [bikePos[0], 0.3, bikePos[1]], volume: 0.55 });
+    words.push({ text: "WHAM!", start: contact, end: contact + 1.1, point: [bikePos[0], 2.3, bikePos[1]], style: "crash" });
+    camera.addShake(contact, 0.25, 0.5);
+
+    // The rider flies forward off the kicker's side (clear of the bike sliding along on its other side).
+    let end = Math.max(kickEnd, down);
+    let thrownLabel = "";
+    for (const [riderId, rider] of Object.entries(characters)) {
+      if (rider.seatedIn(contact)?.car !== bikeId) continue;
+      const flight = 1.1;
+      const landing = add2(bikePos, rotate2([Math.sign(lateral) * 1.0, Math.max(2, speed * flight * 0.6)], heading));
+      const landed = rider.addThrown(contact, landing, heading, flight);
+      rider.addMood(contact, "shocked");
+      rider.addMood(landed, "dazed");
+      soundCues.push({ time: landed, name: "thud", point: [landing[0], 0.3, landing[1]], volume: 1 });
+      end = Math.max(end, landed);
+      thrownLabel = `, ${riderId} thrown to ${fmtPoint(landing)}`;
+    }
+    return { end, label: `kicks ${bikeId} over at ${fmt(contact)}s (${fmt(speed)} m/s)${thrownLabel}` };
+  };
+
   const runAction = (action: Action, start: number): { end: number; label: string } => {
     switch (action.type) {
       case "drive": {
@@ -424,6 +491,8 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
         vehicle.addDashcamTug(reachStart + 0.5, action.duration - 0.4);
         return { end, label: `yanks at ${action.car}'s dashcam` };
       }
+      case "kick-over":
+        return planKickOver(action.actor, action.car, start);
       case "siren":
         return { end: cars[action.actor].setSiren(start, action.on, action.sound), label: `siren ${action.on ? (action.sound ? "on" : "lights only") : "off"}` };
       case "sound":

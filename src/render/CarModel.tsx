@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import * as THREE from "three";
-import { type CarShape, type SeatName, availableSeats, mudSpots, seatLayout } from "../catalog/cars";
+import { type CarShape, type SeatName, availableSeats, isBike, mudSpots, seatLayout } from "../catalog/cars";
 import type { CarState } from "../engine/carTrack";
 import { Part, shapes } from "./toon";
 
@@ -24,6 +24,7 @@ interface CarModelProps {
 
 /** Procedural cartoon car. Forward is +Z; the driver (left) side is +X. */
 export const CarModel = ({ shape, color, state, label, night, dashcam, time, insideView, rearLabel }: CarModelProps) => {
+  if (isBike(shape)) return <Motorcycle shape={shape} color={color} state={state} night={night} />;
   const wheelX = shape.width / 2 - 0.12;
   const wheelZ = shape.wheelbase / 2;
   const bodyHeight = shape.beltline - shape.bodyBottom;
@@ -51,6 +52,63 @@ export const CarModel = ({ shape, color, state, label, night, dashcam, time, ins
         <Extras shape={shape} color={color} />
         {state.mud.length > 0 && <Mud shape={shape} splats={state.mud} insideView={insideView} />}
         {dashcam && !insideView && <Dashcam shape={shape} time={time} tug={state.dashcamTug} />}
+      </group>
+    </group>
+  );
+};
+
+const CHROME = "#ced4da";
+
+/**
+ * Cartoon motorcycle: two wheels in line, chunky tank and seat, handlebar with mirrors, round headlight.
+ * Tipping over pivots on the ground line under the wheels, lifted a little as it lands on the handlebar.
+ */
+const Motorcycle = ({ shape, color, state, night }: { shape: CarShape; color: string; state: CarState; night?: boolean }) => {
+  const r = shape.wheelRadius;
+  const half = shape.wheelbase / 2;
+  const tipped = Math.abs(state.tilt);
+  const rest = 0.16 * Math.sin(tipped);
+  return (
+    <group position={[state.pos[0], state.lift, state.pos[1]]} rotation={[0, state.heading, 0]}>
+      <Part geometry={shapes.plane(shape.width * 1.1, shape.length * 1.02)} color="#000000" opacity={0.18} position={[0, 0.02, 0]} outline={false} shadow={false} />
+      <group position={[0, rest, 0]} rotation={[0, 0, -state.tilt]}>
+        <group rotation={[state.pitch, 0, state.roll]} position={[0, state.heave, 0]}>
+          {[half, -half].map((z) => (
+            <group key={z} position={[0, r, z]} rotation={[0, z > 0 ? state.steer : 0, 0]}>
+              <group rotation={[state.wheelSpin, 0, 0]}>
+                <Part geometry={shapes.wheel(r, 0.16)} color={TIRE} outline={0.025} />
+                <Part geometry={shapes.wheel(r * 0.6, 0.18)} color={CHROME} outline={false} />
+                <Part geometry={shapes.box(0.2, r * 1.1, 0.05, 0.015)} color="#868e96" outline={false} />
+              </group>
+            </group>
+          ))}
+          {/* Frame from the rear axle to the steering head, engine block between the legs. */}
+          <Part geometry={shapes.box(0.14, 0.14, 1.25, 0.05)} color={TRIM} position={[0, 0.55, -0.05]} rotation={[-0.12, 0, 0]} />
+          <Part geometry={shapes.box(0.3, 0.3, 0.42, 0.07)} color="#495057" position={[0, 0.42, 0.12]} />
+          <Part geometry={shapes.cylinder(0.05, 0.05, 0.75, 10)} color={CHROME} position={[-0.2, 0.32, -0.35]} rotation={[Math.PI / 2 - 0.1, 0, 0]} outline={0.01} />
+          {/* Tank, seat and tail. */}
+          <Part geometry={shapes.sphere(1)} color={color} position={[0, 0.8, 0.3]} scale={[0.2, 0.15, 0.32]} />
+          <Part geometry={shapes.box(0.3, 0.1, 0.62, 0.05)} color="#212529" position={[0, shape.beltline, -0.2]} />
+          <Part geometry={shapes.box(0.26, 0.14, 0.4, 0.06)} color={color} position={[0, 0.72, -0.62]} rotation={[0.18, 0, 0]} />
+          <Part geometry={shapes.box(0.16, 0.06, 0.04, 0.02)} color={state.braking ? "#ff4d4d" : "#b5172b"} emissive={state.braking ? "#ff1a1a" : undefined} position={[0, 0.74, -0.83]} outline={false} />
+          <Part geometry={shapes.box(0.3, 0.05, 0.42, 0.02)} color={color} position={[0, r * 2 + 0.06, -half + 0.05]} />
+          {/* Fork, handlebar, mirrors and headlight. */}
+          {[1, -1].map((x) => (
+            <Part key={x} geometry={shapes.cylinder(0.025, 0.025, 0.75, 8)} color={CHROME} position={[x * 0.09, 0.68, half - 0.12]} rotation={[0.38, 0, 0]} outline={0.008} />
+          ))}
+          <group position={[0, 1.05, half - 0.3]} rotation={[0, state.steer * 0.6, 0]}>
+            <Part geometry={shapes.cylinder(0.025, 0.025, 0.72, 8)} color={TRIM} rotation={[0, 0, Math.PI / 2]} outline={0.008} />
+            {[1, -1].map((x) => (
+              <group key={x}>
+                <Part geometry={shapes.cylinder(0.035, 0.035, 0.13, 8)} color="#212529" position={[x * 0.3, 0, 0]} rotation={[0, 0, Math.PI / 2]} outline={false} />
+                <Part geometry={shapes.cylinder(0.01, 0.01, 0.2, 6)} color={TRIM} position={[x * 0.24, 0.1, 0]} outline={false} />
+                <Part geometry={shapes.sphere(0.05)} color={CHROME} position={[x * 0.25, 0.21, 0]} scale={[1, 0.7, 0.4]} outline={0.006} />
+              </group>
+            ))}
+          </group>
+          <Part geometry={shapes.sphere(0.11)} color="#fffbe6" emissive={night ? "#fff3b0" : undefined} position={[0, 0.88, half - 0.1]} scale={[1, 1, 0.6]} />
+          <Part geometry={shapes.box(0.26, 0.04, 0.4, 0.02)} color={color} position={[0, r * 2 + 0.05, half - 0.02]} />
+        </group>
       </group>
     </group>
   );

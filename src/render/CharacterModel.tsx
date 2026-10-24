@@ -32,8 +32,8 @@ export const CharacterModel = ({ look, state, time, talk, seed }: CharacterModel
         <Leg side={-1} hip={pose.rHipX} knee={pose.rKnee} look={look} />
         <group rotation={[pose.spineX, pose.spineY, pose.spineZ]}>
           <Torso look={look} />
-          <Arm side={1} shoulderX={pose.lShoulderX} shoulderZ={pose.lShoulderZ} elbow={pose.lElbow} look={look} />
-          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} item={state.item === "check" ? undefined : state.item} />
+          <Arm side={1} shoulderX={pose.lShoulderX} shoulderZ={pose.lShoulderZ} elbow={pose.lElbow} twist={pose.lArmTwist} look={look} />
+          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} twist={pose.rArmTwist} look={look} item={state.item === "check" ? undefined : state.item} />
           {state.item === "check" && <BigCheck />}
           <Part geometry={shapes.cylinder(0.07, 0.08, 0.14)} color={look.skin} position={[0, 0.58, 0]} outline={false} />
           <group position={[0, RIG.headHeight, 0]} rotation={[pose.headX, pose.headY, pose.headZ]}>
@@ -55,14 +55,18 @@ const Leg = ({ side, hip, knee, look }: { side: 1 | -1; hip: number; knee: numbe
   </group>
 );
 
-const Arm = ({ side, shoulderX, shoulderZ, elbow, look, item }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; item?: "phone" | "mug" | "finger" }) => (
+const Arm = ({ side, shoulderX, shoulderZ, elbow, twist, look, item }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; twist: number; look: CharacterLook; item?: "phone" | "mug" | "finger" | "peace" }) => (
   <group position={[side * RIG.shoulderSpacing * look.build, RIG.shoulderHeight - 0.03, 0]} rotation={[-shoulderX, 0, side * shoulderZ]}>
     <Part geometry={shapes.limb(0.068, RIG.upperArm)} color={look.shirt} />
-    <group position={[0, -RIG.upperArm + 0.02, 0]} rotation={[-elbow, 0, 0]}>
+    {/* Twist about the upper arm turns the elbow's bend sideways (hand on the hip). */}
+    <group position={[0, -RIG.upperArm + 0.02, 0]} rotation={[-elbow, -side * twist, 0, "YXZ"]}>
       <Part geometry={shapes.limb(0.06, RIG.lowerArm)} color={look.skin} />
       <Part geometry={shapes.sphere(0.075)} color={look.skin} position={[0, -RIG.lowerArm, 0]} />
       {item === "phone" && <Phone />}
       {item === "mug" && <Mug upright={shoulderX + elbow} />}
+      {item === "peace" && [1, -1].map((spread) => (
+        <Part key={spread} geometry={shapes.capsule(0.03, 0.12)} color={look.skin} position={[spread * 0.035, -RIG.lowerArm - 0.13, 0.01]} rotation={[0, 0, spread * 0.3]} outline={0.008} />
+      ))}
       {item === "finger" && <Part geometry={shapes.capsule(0.034, 0.13)} color={look.skin} position={[0, -RIG.lowerArm - 0.14, 0.01]} outline={0.008} />}
     </group>
   </group>
