@@ -72,7 +72,8 @@ expensive to catch after a 50-minute render.
   person has reached their mark (`after("a-ready", …)`). Otherwise the spot is computed from where they were.
 - Cars that are already moving: `fromSpeed` on the first drive. Cars that leave: end the drive after the scene ends,
   or ease to a stop. A car parked off-screen can enter at speed (`fromSpeed`) when a cue fires.
-- `crashInto` handles moving targets. Give the striker a `brake` (late, too-gentle stop) for a believable hit; check
+- `crashInto` handles moving targets, and reversing cars (back out with a `reverse` drive with `endSpeed`, then
+  `crashInto` — it keeps going tail-first). Give the striker a `brake` (late, too-gentle stop) for a believable hit; check
   the closing speed in the inspect label (~8–12 m/s reads as a solid crash).
 - Held poses (`tased`) stay until the next body action; follow with `play("get-up")` before walking away.
 - Don't pass `duration` to `say()`. For emphasis use mood (`feel("angry")` → red shouting bubble) or tags
@@ -139,6 +140,10 @@ expensive to catch after a 50-minute render.
     z=-16, driveways at x=0, ±16, ±32. The front (z > 6) is clear for cameras.
   - highway (forest highway): eastbound lanes z=1.8 (fast) and z=5.4, shoulders z≈-0.6 and 8.3, guardrails z=-1.3
     and 10, walls of 7–10m pines beyond. Cameras stay in the corridor (z -1…11) or above y≈11.
+  - narrow-street: one lane (z -3…3) between yellow "EMERGENCY VEHICLES ONLY" strips (park on them at z = ±4),
+    houses both sides with 2-car driveways. North lots x = 0, ±16, ±32 / south lots x = ±8, ±24, 40: house door at
+    [lot − 2.5, ∓11], driveway at lot + 3.5 (|z| 5–11). Cameras: street, front yards, or above the roofs.
+    People who "come out of the house" can start just inside the door (|z| ≈ 12.4) — the walls hide them.
   - parking-lot: asphalt x -35..35, z -28..16. empty: just ground.
 
 ## Writing scenes (`src/engine/dsl.ts`)
@@ -185,9 +190,9 @@ export default scene({
 - Moods: neutral, happy, angry (V brows, red flush, shouting), scared (wide eyes, sweat, trembling), shocked, smug,
   sad, pain (wince), dazed (eyes shut). Blend over 0.25s. Bubbles go red/shaky when angry, wobbly when scared.
 - Gestures: wave, wave-both, point, cheer, clap, nod, shake-head, shrug, think, facepalm, look-around, phone-call, film,
-  yell, arms-crossed, hold-neck, shove, cuffed, hands-up, middle-finger, smack-wheel (seated: laughing, slapping the
-  wheel, with thuds). Body: jump, dance, sit-ground, fall-over, cower, stagger,
-  reach-in, tased, get-up. (`npm run catalog` is the source of truth.)
+  yell, arms-crossed, hold-neck, shove, cuffed, hands-up, punch (a smack sound every 0.4s), middle-finger, smack-wheel
+  (seated: laughing, slapping the wheel, with thuds). Body: jump, dance, sit-ground, fall-over, cower, stagger,
+  reach-in, tased, knocked-out (held), get-up. (`npm run catalog` is the source of truth.)
 
 ### Cars
 

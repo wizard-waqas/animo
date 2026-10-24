@@ -128,6 +128,18 @@ export const thud = (rng: Rng, weight = 1) => {
   });
 };
 
+/** Cartoon punch landing: a meaty low thump under a sharp slap of noise. */
+export const smack = (rng: Rng) => {
+  const slap = new Bandpass(rng.range(1500, 2100), 1.1);
+  const body = new Lowpass(380);
+  return synth(0.18, (t) => {
+    const crack = slap.process(rng.noise()) * decay(t, 0.014) * 2.2;
+    const meat = body.process(rng.noise()) * decay(t, 0.035) * 1.8;
+    const thump = Math.sin(TAU * (110 - 200 * t) * t) * decay(t, 0.04) * 0.9;
+    return (crack + meat + thump) * attack(t, 0.0008);
+  });
+};
+
 /** Wet mud splat: a noise burst whose band sweeps down fast (the "splorch"), plus a soft low slap. Noise only. */
 export const splat = (rng: Rng, size = 1) => {
   const band = new Bandpass(900, 1.3);

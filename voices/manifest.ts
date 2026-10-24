@@ -82,5 +82,53 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "provider": "elevenlabs",
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "Wait... their number's\nright on the truck!"
+  },
+  "53fdbf9d": {
+    "file": "53fdbf9d.wav",
+    "duration": 2.326,
+    "envelope": "0212fkkmonqvDJMLKKEvsud00GPzywxvq30009eedvTUXVNEyh000000d50000kzBCECAzyzADGFEFCCCzBBINJAg100948iNZWTQIsb053yDCBHJKIzmmntJTIKFzyxvwtqqrxxzDKz",
+    "provider": "elevenlabs",
+    "voice": "cgSgspJ2msm6clMCkdW9",
+    "text": "You are parked in a\nno parking zone."
+  },
+  "5d69edc5": {
+    "file": "5d69edc5.wav",
+    "duration": 1.789,
+    "envelope": "00ovyBEGFHAAMNHDwbdgjlsLOOPNLKJIHIIHEAym50000000000000000008a6797CMNSVZXYSp0000006sDNQGAwspuzCHCzzxsmfb60001",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "MUMMY! PAPA!"
+  },
+  "9296fc40": {
+    "file": "9296fc40.wav",
+    "duration": 1.43,
+    "envelope": "00xQLYSSLKPKLIy9owywrb978bghlzxzDCDGJQVPx233aoJDCGzACl62jrb0oZQFzABBBCDHHzxzyywmklhd92",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Why did you hit my car!"
+  },
+  "979d4f5c": {
+    "file": "979d4f5c.wav",
+    "duration": 1.968,
+    "envelope": "004QNzDCABBrlmlntFOMZGMKFCGFNMLAtESLDr87enKJIGCCBAIyqrGLJKSLGKJCzAAsme4000122220000000000000000000000000000000000000000",
+    "provider": "elevenlabs",
+    "voice": "pNInz6obpgDQGcFmaJgB",
+    "text": "Who's yelling at my wife?"
+  },
+  "9a7a1337": {
+    "file": "9a7a1337.wav",
+    "duration": 2.927,
+    "envelope": "068fqql74hptELJFCssmkiEQLPOtg002GvyBDDEA9000kkghhfaDJyevCFGEBAzxxvsc00jga974300000000000000000000000000000000000000000000000000006OZZFj5hNUUSTTSNPQEi21vFGGJHHFFBzxwwwxyzAyrf730",
+    "provider": "elevenlabs",
+    "voice": "cgSgspJ2msm6clMCkdW9",
+    "text": "It was an accident.\nBut not mine."
+  },
+  "be81ca33": {
+    "file": "be81ca33.wav",
+    "duration": 1.651,
+    "envelope": "00foGBUROPUVTSSRSTTTTTVYMffgf9100qzROKHHIJLOqbfimpquzCFNVZQKIRGFGCxvsphhilqtvuvvwzttonqi50000000003u",
+    "provider": "elevenlabs",
+    "voice": "pqHfZKP75CvOlQylNhV4",
+    "text": "Who did this?!"
   }
 };
