@@ -1,4 +1,4 @@
-import { CARS } from "../catalog/cars";
+import { CARS, mudSpots } from "../catalog/cars";
 import { PROP_BOUNDS, SET_PROPS } from "../catalog/sets";
 import { CHARACTERS, type CharacterLook } from "../catalog/characters";
 import { type CameraState, CameraTrack } from "./cameraTrack";
@@ -7,7 +7,7 @@ import { type CharacterState, CharacterTrack, headHeight } from "./characterTrac
 import { voiceIdentity } from "../voice/voices";
 import { clipDefinition } from "./pose";
 import { type Vec2, type Vec3, DEG, add2, clamp, distance2, headingOf, length2, rotate2, scale2, sub2 } from "./math";
-import { type Action, type SceneSpec, type SoundName, type Target, FORMAT_SIZES } from "./spec";
+import { type Action, type PropSpec, type SceneSpec, type SetName, type SoundName, type Target, FORMAT_SIZES } from "./spec";
 
 export interface TimelineRow { actor: string; label: string; start: number; end: number }
 
@@ -16,7 +16,11 @@ export interface Caption { start: number; end: number; text: string; position: "
 /** A crash: where/when the cars touched, for the impact burst, debris, smoke and sound. */
 export interface Crash { time: number; point: Vec3; speed: number; direction: Vec2; colors: string[]; cars: string[] }
 /** Comic onomatopoeia popping up in the scene ("HONK!", "CRASH!"). */
-export interface Word { text: string; start: number; end: number; actor?: string; point?: Vec3; style: "crash" | "honk" }
+export interface Word { text: string; start: number; end: number; actor?: string; point?: Vec3; style: "crash" | "honk" | "splat" }
+/** A clump of mud in flight: thrown at `start` from `from` with velocity `velocity`, lands at `end`. */
+export interface MudBlob { start: number; end: number; from: Vec3; velocity: Vec3; size: number }
+/** A prop with its appearance (and traffic-light green) times resolved. */
+export type ScenePropSpec = PropSpec & { fromTime?: number; greenTime?: number };
 /** A taser shot: wires from the officer's hand to the target; crackling electricity while `zapEnd` hasn't passed. */
 export interface Zap { start: number; zapEnd: number; wiresEnd: number; officer: string; target: string }
 
@@ -34,6 +38,11 @@ export interface CompiledScene {
   words: Word[];
   soundCues: SoundCue[];
   zaps: Zap[];
+  mud: MudBlob[];
+  /** Scene props (not the set's own dressing), with cue-based appearance times resolved. */
+  props: ScenePropSpec[];
+  /** Location cuts, in time order. The first entry is the scene's starting set at t=0. */
+  locations: { time: number; set: SetName }[];
   timeline: TimelineRow[];
   /** Named entries (`.as("cue")`) with when they start and end. */
   cues: Record<string, { start: number; end: number }>;
@@ -51,6 +60,11 @@ export interface FrameState {
   crashes: Crash[];
   words: (Word & { point: Vec3 })[];
   zaps: { hand: Vec3; body: Vec3; electrified: boolean; t: number }[];
+  mud: { point: Vec3; size: number; stretch: Vec3 }[];
+  /** The location showing now, its scene props, and the actors that belong to another location (not drawn). */
+  set: SetName;
+  props: ScenePropSpec[];
+  offstage: string[];
   /** Set while showing dashcam footage: the scene is shown as it was at `sourceTime`. */
   replay?: { car: string; sourceTime: number; progress: number };
 }
@@ -72,6 +86,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   for (const [id, actor] of Object.entries(spec.cast)) {
     if (actor.kind !== "car") continue;
     cars[id] = new CarTrack(id, CARS[actor.model], actor.at, actor.facing * DEG);
+    if (actor.muddy) mudSpots(CARS[actor.model]).forEach((_, spot) => cars[id].addMud(spot, -Infinity));
   }
   for (const [id, actor] of Object.entries(spec.cast)) {
     if (actor.kind !== "character") continue;
@@ -120,7 +135,7 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   const cues: CompiledScene["cues"] = {};
   for (const entry of spec.timeline) {
     if (!entry.id) continue;
-    if (spec.cast[entry.id] || entry.id === "camera" || entry.id === "overlay" || entry.id === "sound") throw new Error(`Cue name "${entry.id}" clashes with an actor id`);
+    if (spec.cast[entry.id] || SCENE_ACTORS.includes(entry.id)) throw new Error(`Cue name "${entry.id}" clashes with an actor id`);
     if (spec.timeline.filter((other) => other.id === entry.id).length > 1) throw new Error(`Cue name "${entry.id}" is used twice`);
   }
   const startOf = (entry: SceneSpec["timeline"][number]) => {
@@ -135,11 +150,11 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     }
     return (referenceEnd ?? 0) + (entry.after ?? 0);
   };
-  const isSceneLevel = (entry: SceneSpec["timeline"][number]) => ["camera", "overlay", "sound"].includes(entry.action.actor);
+  const isSceneLevel = (entry: SceneSpec["timeline"][number]) => SCENE_ACTORS.includes(entry.action.actor);
   const ordered = [...spec.timeline.filter((entry) => !isSceneLevel(entry)), ...spec.timeline.filter(isSceneLevel)];
   for (const entry of spec.timeline) {
     const actor = entry.action.actor;
-    if (!(actor in cars) && !(actor in characters) && !["camera", "overlay", "sound"].includes(actor)) {
+    if (!(actor in cars) && !(actor in characters) && !SCENE_ACTORS.includes(actor)) {
       throw new Error(`Timeline uses unknown actor "${actor}". Add it to cast.`);
     }
   }
@@ -161,6 +176,8 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
   const words: Word[] = [];
   const soundCues: SoundCue[] = [];
   const zaps: Zap[] = [];
+  const mud: MudBlob[] = [];
+  const locations: CompiledScene["locations"] = [{ time: 0, set: spec.set }];
   camera.dashcamPose = (carId, t) => {
     const track = cars[carId];
     if (!track) throw new Error(`replay: "${carId}" is not a car`);
@@ -262,6 +279,43 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     return { end: impactTime, label: `crash into ${victim ? victim.id : fmtPoint(into as Vec2)} (closing speed ${fmt(impactSpeed)} m/s)` };
   };
 
+  /**
+   * Mud flies off the back of `truckId` and splatters onto `ontoId`: each clump is thrown on a ballistic arc
+   * that lands on one of the target's mud spots exactly when (and where) the target car will be.
+   */
+  const planMud = (truckId: string, ontoId: string, start: number, amount: number) => {
+    const truck = cars[truckId];
+    const target = cars[ontoId];
+    if (!target) throw new Error(`${truckId}.mud: "${ontoId}" is not a car in the cast`);
+    target.markRead(start);
+    const spots = mudSpots(target.shape).slice(0, amount);
+    let seed = 5;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    const gravity = 9.8;
+    let firstLanding = Infinity;
+    let lastLanding = start;
+    spots.forEach((spot, index) => {
+      const thrown = start + 0.32 * (index / spots.length) + random() * 0.05;
+      const flight = 0.5 + random() * 0.25;
+      const lands = thrown + flight;
+      const releaseLocal: Vec2 = [(random() * 2 - 1) * truck.shape.width * 0.3, -truck.shape.length / 2 + 0.3];
+      const release = truck.localToWorld(releaseLocal, thrown);
+      const from: Vec3 = [release[0], truck.shape.roof - 0.1 + truck.lift(thrown), release[1]];
+      const landing = target.localToWorld([spot.pos[0], spot.pos[2]], lands);
+      const to: Vec3 = [landing[0], spot.pos[1] + target.lift(lands), landing[1]];
+      const velocity: Vec3 = [(to[0] - from[0]) / flight, (to[1] - from[1] + 0.5 * gravity * flight * flight) / flight, (to[2] - from[2]) / flight];
+      mud.push({ start: thrown, end: lands, from, velocity, size: spot.size });
+      target.addMud(index, lands);
+      firstLanding = Math.min(firstLanding, lands);
+      lastLanding = Math.max(lastLanding, lands);
+    });
+    words.push({ text: "SPLAT!", start: firstLanding, end: firstLanding + 1.2, actor: ontoId, style: "splat" });
+    return { end: lastLanding, label: `mud onto ${ontoId} (${spots.length} splats, landing ${fmt(firstLanding)}–${fmt(lastLanding)}s)` };
+  };
+
   const runAction = (action: Action, start: number): { end: number; label: string } => {
     switch (action.type) {
       case "drive": {
@@ -290,7 +344,13 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
         return { end, label: `honk ×${action.times}` };
       }
       case "hop":
-        return { end: cars[action.actor].addHop(start, action.height, action.duration), label: `hop ${action.height}m` };
+        return { end: cars[action.actor].addHop(start, action.height, action.duration, action.sound), label: `hop ${action.height}m` };
+      case "mud":
+        return planMud(action.actor, action.onto, start, action.amount);
+      case "location":
+        locations.push({ time: start, set: action.set });
+        locations.sort((a, b) => a.time - b.time);
+        return { end: start, label: `cut to location "${action.set}"` };
       case "door":
         return { end: cars[action.actor].addDoor(action.door, start, action.open, action.duration), label: `${action.open ? "open" : "close"} ${action.door} door` };
       case "walk": {
@@ -329,6 +389,8 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
       }
       case "exit":
         return { end: characters[action.actor].addExit(start), label: "get out of car" };
+      case "place":
+        return { end: characters[action.actor].addPlace(start, action.at, action.facing === undefined ? undefined : action.facing * DEG), label: `placed at ${fmtPoint(action.at)}` };
       case "feel":
         return { end: characters[action.actor].addMood(start, action.mood), label: `feels ${action.mood}` };
       case "tase": {
@@ -414,18 +476,48 @@ export const compileScene = (spec: SceneSpec): CompiledScene => {
     if (end > spec.duration + 1e-6 && entry.action.type !== "drive") warnings.push(`${actor}: "${label}" ends at ${fmt(end)}s, after the scene ends (${spec.duration}s)`);
   }
 
-  for (const car of Object.values(cars)) car.finalize(spec.duration);
+  for (const [id, car] of Object.entries(cars)) {
+    car.driverIn = (t) => Object.values(characters).some((person) => {
+      const seat = person.seatedIn(t);
+      return seat?.car === id && seat.seat === "driver";
+    });
+    car.finalize(spec.duration);
+  }
+  const resolveWhen = (prop: PropSpec, when: PropSpec["from"], what: string) => {
+    if (when === undefined || typeof when === "number") return when;
+    const cue = cues[when.cue];
+    if (!cue) throw new Error(`A ${prop.type} prop ${what} cue "${when.cue}", which isn't in the timeline`);
+    return cue.end + when.delay;
+  };
+  const props: ScenePropSpec[] = spec.props.map((prop) => ({
+    ...prop, fromTime: resolveWhen(prop, prop.from, "appears from"), greenTime: resolveWhen(prop, prop.green, "turns green at"),
+  }));
+  const setAt = (t: number) => locationAt(locations, t);
   if (!camera.hasShotAt(0)) warnings.push("No camera shot at t=0 — using the default wide shot until the first camera action.");
-  warnings.push(...findBlockedShots(spec, camera));
+  warnings.push(...findBlockedShots(spec, camera, props, setAt));
   const unrecorded = Object.values(characters).flatMap((track) => track.speech.filter((line) => !line.clip));
   if (spec.sound.enabled && spec.sound.voices && unrecorded.length > 0) {
     warnings.push(`${unrecorded.length} spoken line(s) have no voice recording yet (timing is estimated) — run \`npm run voices -- ${spec.id}\``);
   }
   warnings.push(...findSpeedJumps(spec.duration, cars));
-  warnings.push(...findCollisions(spec.duration, cars, characters));
+  warnings.push(...findCollisions(spec, cars, characters));
 
   timeline.sort((a, b) => a.start - b.start || a.actor.localeCompare(b.actor));
-  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, zaps, timeline, cues, warnings };
+  return { spec, cars, characters, looks, camera, captions, crashes, words, soundCues, zaps, mud, props, locations, timeline, cues, warnings };
+};
+
+const SCENE_ACTORS = ["camera", "overlay", "sound", "world"];
+
+export const locationAt = (locations: CompiledScene["locations"], t: number) => {
+  let set = locations[0].set;
+  for (const location of locations) if (location.time <= t) set = location.set;
+  return set;
+};
+
+/** Is this actor on screen (and audible) at time t? Actors tagged with a set only appear in that set. */
+export const onstage = (scene: CompiledScene, actor: string, t: number) => {
+  const spec = scene.spec.cast[actor];
+  return !spec?.set || spec.set === locationAt(scene.locations, t);
 };
 
 export const evaluateScene = (scene: CompiledScene, realTime: number): FrameState => {
@@ -447,6 +539,16 @@ export const evaluateScene = (scene: CompiledScene, realTime: number): FrameStat
       const style = face && face.redness > 0.3 ? "shout" : face && face.tremble > 0.4 ? "shaky" : "normal";
       bubbles.push({ actor: id, text: speech.text, start: speech.start, end: speech.end, head, style });
     }
+  }
+  const set = locationAt(scene.locations, t);
+  const offstage = Object.keys(scene.spec.cast).filter((id) => !onstage(scene, id, t));
+  const mud: FrameState["mud"] = [];
+  for (const blob of scene.mud) {
+    if (t < blob.start || t > blob.end) continue;
+    const age = t - blob.start;
+    const point: Vec3 = [blob.from[0] + blob.velocity[0] * age, blob.from[1] + blob.velocity[1] * age - 4.9 * age * age, blob.from[2] + blob.velocity[2] * age];
+    const vertical = blob.velocity[1] - 9.8 * age;
+    mud.push({ point, size: blob.size, stretch: [blob.velocity[0], vertical, blob.velocity[2]] });
   }
   const words: FrameState["words"] = [];
   for (const word of replay ? [] : scene.words) {
@@ -486,14 +588,21 @@ export const evaluateScene = (scene: CompiledScene, realTime: number): FrameStat
     crashes: scene.crashes.filter((crash) => t >= crash.time),
     words,
     zaps,
+    mud,
+    set,
+    props: scene.props.filter((prop) => (!prop.set || prop.set === set) && (prop.fromTime === undefined || t >= prop.fromTime)),
+    offstage,
     replay: replay && { car: replay.car, sourceTime: replay.sourceTime, progress: (realTime - replay.start) / (replay.end - replay.start) },
   };
 };
 
 /** Sample the scene and report people walking through cars and cars crashing into each other. */
-const findCollisions = (duration: number, cars: Record<string, CarTrack>, characters: Record<string, CharacterTrack>) => {
+const findCollisions = (spec: SceneSpec, cars: Record<string, CarTrack>, characters: Record<string, CharacterTrack>) => {
+  const duration = spec.duration;
   const warnings = new Set<string>();
   const carIds = Object.keys(cars);
+  // Actors in different locations never meet.
+  const apart = (a: string, b: string) => Boolean(spec.cast[a].set && spec.cast[b].set && spec.cast[a].set !== spec.cast[b].set);
   for (let t = 0; t <= duration; t += 0.1) {
     for (const [id, character] of Object.entries(characters)) {
       const boardingCar = character.boardingAt(t);
@@ -504,11 +613,13 @@ const findCollisions = (duration: number, cars: Record<string, CarTrack>, charac
       const state = character.state(t);
       const point: Vec2 = [state.pos[0], state.pos[2]];
       for (const carId of carIds) {
+        if (apart(id, carId)) continue;
         if (cars[carId].contains(point, t, 0.1)) warnings.add(`${id} overlaps ${carId} around t=${fmt(Math.round(t * 2) / 2)}s (walking through it, or the car drives through them?)`);
       }
     }
     for (let i = 0; i < carIds.length; i++) {
       for (let j = i + 1; j < carIds.length; j++) {
+        if (apart(carIds[i], carIds[j])) continue;
         const a = cars[carIds[i]];
         const b = cars[carIds[j]];
         const touching = a.corners(t).some((corner) => b.contains(corner, t, 0)) || b.corners(t).some((corner) => a.contains(corner, t, 0));
@@ -518,6 +629,7 @@ const findCollisions = (duration: number, cars: Record<string, CarTrack>, charac
     const characterIds = Object.keys(characters);
     for (let i = 0; i < characterIds.length; i++) {
       for (let j = i + 1; j < characterIds.length; j++) {
+        if (apart(characterIds[i], characterIds[j])) continue;
         const a = characters[characterIds[i]];
         const b = characters[characterIds[j]];
         if (a.isInVehicle(t) || b.isInVehicle(t)) continue;
@@ -531,11 +643,13 @@ const findCollisions = (duration: number, cars: Record<string, CarTrack>, charac
 };
 
 /** Warn when set dressing sits between the camera and what it's looking at (or the camera is inside a prop). */
-const findBlockedShots = (spec: SceneSpec, camera: CameraTrack) => {
-  const props = [...SET_PROPS[spec.set], ...spec.props];
+const findBlockedShots = (spec: SceneSpec, camera: CameraTrack, sceneProps: ScenePropSpec[], setAt: (t: number) => SetName) => {
   const warnings = new Map<string, number[]>();
   for (let t = 0; t <= spec.duration; t += 0.25) {
     const { position, lookAt } = camera.state(t);
+    // During a dashcam replay the camera is in the earlier moment's location.
+    const set = setAt(camera.replayAt(t)?.sourceTime ?? t);
+    const props = [...SET_PROPS[set], ...sceneProps.filter((prop) => (!prop.set || prop.set === set) && (prop.fromTime === undefined || t >= prop.fromTime))];
     for (const prop of props) {
       const bounds = PROP_BOUNDS[prop.type];
       const radius = bounds.radius * prop.scale;
@@ -544,7 +658,7 @@ const findBlockedShots = (spec: SceneSpec, camera: CameraTrack) => {
         const x = position[0] + (lookAt[0] - position[0]) * u;
         const y = position[1] + (lookAt[1] - position[1]) * u;
         const z = position[2] + (lookAt[2] - position[2]) * u;
-        if (y < height && Math.hypot(x - prop.at[0], z - prop.at[1]) < radius) {
+        if (y < height + (prop.y ?? 0) && y > (prop.y ?? 0) && Math.hypot(x - prop.at[0], z - prop.at[1]) < radius) {
           const key = `${prop.type} at ${fmtPoint(prop.at)}`;
           warnings.set(key, [...(warnings.get(key) ?? []), t]);
           break;
@@ -620,7 +734,8 @@ export const findJolts = (scene: CompiledScene, fps = 60) => {
       ...car.launches.map((launch) => [launch, launch] as const),
     ];
     if (scene.cars[key]) return hopMoments(scene.cars[key]);
-    return Object.values(scene.cars).flatMap(hopMoments);
+    const teleports = (scene.characters[key]?.jumps ?? []).map((time) => [time, time] as const);
+    return [...Object.values(scene.cars).flatMap(hopMoments), ...teleports];
   };
   const tracks: Record<string, Vec3[]> = {};
   const push = (key: string, point: Vec3) => (tracks[key] ??= []).push(point);

@@ -8,21 +8,25 @@ import { Prop } from "./Props";
 import type { StylePreset } from "./styles";
 import { Part, shapes, toonGradient } from "./toon";
 
-/** Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action. */
-export const World = ({ style, set, props, focus, debug }: { style: StylePreset; set: SetName; props: PropSpec[]; focus: Vec3; debug: boolean }) => {
+/**
+ * Sky, light, ground and the set. `focus` is where the camera looks, so shadows stay sharp around the action.
+ * `shadowMap` is the shadow texture size (0 = no shadow pass; on software WebGL that pass costs more than the frame).
+ */
+export const World = ({ style, set, props, focus, debug, shadowMap = 2048, time }: { style: StylePreset; set: SetName; props: (PropSpec & { greenTime?: number })[]; focus: Vec3; debug: boolean; shadowMap?: number; time: number }) => {
   const setProps = useMemo(() => [...SET_PROPS[set], ...props], [set, props]);
   return (
     <>
       <fog attach="fog" args={[style.skyHorizon, style.fogNear, style.fogFar]} />
       <Sky style={style} />
+      {style.sunDisc && <SunDisc disc={style.sunDisc} />}
       {style.clouds && <Clouds />}
       <hemisphereLight args={[style.ambientSky, style.ambientGround, style.ambientIntensity]} />
-      <Sun style={style} focus={focus} />
+      <Sun style={style} focus={focus} shadowMap={shadowMap} />
       <Ground style={style} set={set} />
       {/* Trees are instanced (cheap even by the hundred); everything else is a regular prop. */}
       <Forest trees={setProps.filter((prop) => prop.type === "tree" || prop.type === "pine")} />
       {setProps.filter((prop) => prop.type !== "tree" && prop.type !== "pine").map((prop, index) => (
-        <Prop key={index} prop={prop} night={style.night} />
+        <Prop key={index} prop={prop} night={style.night} time={time} />
       ))}
       {debug && <gridHelper args={[60, 60, "#ff006e", "#c8c8c8"]} position={[0, 0.08, 0]} />}
     </>
@@ -62,6 +66,31 @@ const Sky = ({ style }: { style: StylePreset }) => {
   );
 };
 
+/** Big low sun on the horizon (sunset): drawn just inside the sky dome, without fog, behind everything. */
+const SunDisc = ({ disc }: { disc: NonNullable<StylePreset["sunDisc"]> }) => {
+  const [x, y, z] = disc.direction;
+  const length = Math.hypot(x, y, z);
+  const distance = 380;
+  const position: Vec3 = [(x / length) * distance, (y / length) * distance, (z / length) * distance];
+  // Face the middle of the world (circles face +Z).
+  const rotation = useMemo(() => {
+    const pivot = new THREE.Object3D();
+    pivot.position.set(...position);
+    pivot.lookAt(0, 0, 0);
+    return pivot.rotation.clone();
+  }, [x, y, z]);
+  return (
+    <group position={position} rotation={rotation}>
+      {[{ radius: 34, color: disc.glow, opacity: 0.22 }, { radius: 22, color: disc.glow, opacity: 0.4 }, { radius: 14, color: disc.color, opacity: 1 }].map((ring) => (
+        <mesh key={ring.radius} renderOrder={-1}>
+          <circleGeometry args={[ring.radius, 48]} />
+          <meshBasicMaterial color={ring.color} transparent opacity={ring.opacity} fog={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
 const CLOUDS: Vec3[] = [[-60, 38, -150], [10, 45, -170], [75, 34, -140], [-120, 42, -110], [130, 40, -120], [-20, 30, -120]];
 const Clouds = () => (
   <>
@@ -75,7 +104,7 @@ const Clouds = () => (
   </>
 );
 
-const Sun = ({ style, focus }: { style: StylePreset; focus: Vec3 }) => {
+const Sun = ({ style, focus, shadowMap }: { style: StylePreset; focus: Vec3; shadowMap: number }) => {
   const light = useRef<THREE.DirectionalLight>(null);
   useLayoutEffect(() => {
     const sun = light.current;
@@ -90,8 +119,8 @@ const Sun = ({ style, focus }: { style: StylePreset; focus: Vec3 }) => {
       ref={light}
       color={style.sunColor}
       intensity={style.sunIntensity}
-      castShadow
-      shadow-mapSize={[2048, 2048]}
+      castShadow={shadowMap > 0}
+      shadow-mapSize={[shadowMap || 1, shadowMap || 1]}
       shadow-camera-left={-28}
       shadow-camera-right={28}
       shadow-camera-top={28}

@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import * as THREE from "three";
 import { type CharacterLook, RIG } from "../catalog/characters";
 import type { CharacterState } from "../engine/characterTrack";
 import { type Face, MOODS } from "../engine/expression";
@@ -31,7 +33,8 @@ export const CharacterModel = ({ look, state, time, talk, seed }: CharacterModel
         <group rotation={[pose.spineX, pose.spineY, pose.spineZ]}>
           <Torso look={look} />
           <Arm side={1} shoulderX={pose.lShoulderX} shoulderZ={pose.lShoulderZ} elbow={pose.lElbow} look={look} />
-          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} phone={state.item === "phone"} />
+          <Arm side={-1} shoulderX={pose.rShoulderX} shoulderZ={pose.rShoulderZ} elbow={pose.rElbow} look={look} item={state.item === "check" ? undefined : state.item} />
+          {state.item === "check" && <BigCheck />}
           <Part geometry={shapes.cylinder(0.07, 0.08, 0.14)} color={look.skin} position={[0, 0.58, 0]} outline={false} />
           <group position={[0, RIG.headHeight, 0]} rotation={[pose.headX, pose.headY, pose.headZ]}>
             <Head look={look} time={time} talk={talk} seed={seed} face={state.face ?? MOODS.neutral} />
@@ -52,13 +55,15 @@ const Leg = ({ side, hip, knee, look }: { side: 1 | -1; hip: number; knee: numbe
   </group>
 );
 
-const Arm = ({ side, shoulderX, shoulderZ, elbow, look, phone = false }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; phone?: boolean }) => (
+const Arm = ({ side, shoulderX, shoulderZ, elbow, look, item }: { side: 1 | -1; shoulderX: number; shoulderZ: number; elbow: number; look: CharacterLook; item?: "phone" | "mug" | "finger" }) => (
   <group position={[side * RIG.shoulderSpacing * look.build, RIG.shoulderHeight - 0.03, 0]} rotation={[-shoulderX, 0, side * shoulderZ]}>
     <Part geometry={shapes.limb(0.068, RIG.upperArm)} color={look.shirt} />
     <group position={[0, -RIG.upperArm + 0.02, 0]} rotation={[-elbow, 0, 0]}>
       <Part geometry={shapes.limb(0.06, RIG.lowerArm)} color={look.skin} />
       <Part geometry={shapes.sphere(0.075)} color={look.skin} position={[0, -RIG.lowerArm, 0]} />
-      {phone && <Phone />}
+      {item === "phone" && <Phone />}
+      {item === "mug" && <Mug upright={shoulderX + elbow} />}
+      {item === "finger" && <Part geometry={shapes.capsule(0.034, 0.13)} color={look.skin} position={[0, -RIG.lowerArm - 0.14, 0.01]} outline={0.008} />}
     </group>
   </group>
 );
@@ -71,6 +76,62 @@ const Phone = () => (
     <Part geometry={shapes.sphere(0.012)} color="#555555" position={[0.026, 0.065, -0.012]} outline={false} shadow={false} />
   </group>
 );
+
+/** Coffee mug in the hand, kept upright (the forearm's swing is undone) with a slight tilt toward the drinker. */
+const Mug = ({ upright }: { upright: number }) => (
+  <group position={[0.02, -RIG.lowerArm - 0.03, 0.05]} rotation={[upright - 0.25, 0, 0]}>
+    <Part geometry={shapes.cylinder(0.055, 0.05, 0.12, 16)} color="#ffffff" position={[0, 0.03, 0.04]} outline={0.008} />
+    <Part geometry={shapes.cylinder(0.046, 0.046, 0.01, 16)} color="#5b3a1e" position={[0, 0.087, 0.04]} outline={false} shadow={false} />
+    <Part geometry={shapes.torus(0.032, 0.011)} color="#ffffff" position={[-0.062, 0.03, 0.04]} rotation={[0, Math.PI / 2, 0]} outline={0.006} />
+  </group>
+);
+
+const checkTextures = new Map<string, THREE.CanvasTexture>();
+/** The giant novelty check, drawn once on a canvas. */
+const checkTexture = () => {
+  const key = "check";
+  let texture = checkTextures.get(key);
+  if (!texture) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 460;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#e9f7e1";
+    context.fillRect(0, 0, 1024, 460);
+    context.strokeStyle = "#2d6a4f";
+    context.lineWidth = 22;
+    context.strokeRect(14, 14, 996, 432);
+    context.fillStyle = "#1b4332";
+    context.font = "800 46px Arial, sans-serif";
+    context.fillText("MUDDY BROS. DIRT CO.", 50, 90);
+    context.font = "600 36px Arial, sans-serif";
+    context.fillText("PAY TO THE ORDER OF:  YOU", 50, 160);
+    context.font = "900 150px Arial, sans-serif";
+    context.textAlign = "center";
+    context.fillStyle = "#1d1b26";
+    context.fillText("$1,000,000", 512, 330);
+    context.font = "italic 600 38px Arial, sans-serif";
+    context.fillText("One million dollars & 00/100", 512, 405);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    checkTextures.set(key, texture);
+  }
+  return texture;
+};
+
+/** Held up in front of the chest with both hands (lives in the torso's frame, so it stays level). */
+const BigCheck = () => {
+  const texture = useMemo(() => checkTexture(), []);
+  return (
+    <group position={[0, RIG.shoulderHeight - 0.02, 0.62]} rotation={[-0.12, 0, 0]}>
+      <Part geometry={shapes.box(1.12, 0.52, 0.02, 0.01)} color="#2d6a4f" outline={0.01} />
+      <mesh position={[0, 0, 0.012]}>
+        <planeGeometry args={[1.08, 0.485]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+};
 
 const Torso = ({ look }: { look: CharacterLook }) => {
   const hasOveralls = look.accessories.includes("overalls");

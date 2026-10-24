@@ -1,15 +1,18 @@
 import type { PropSpec } from "../engine/spec";
+
+/** Scene props carry their resolved traffic-light switch time. */
+type PlacedProp = PropSpec & { greenTime?: number };
 import { DEG } from "../engine/math";
 import { Part, shapes } from "./toon";
 
-/** Set dressing. Everything sits on the ground at `at` and faces +Z at facing 0. */
-export const Prop = ({ prop, night }: { prop: PropSpec; night: boolean }) => (
-  <group position={[prop.at[0], 0, prop.at[1]]} rotation={[0, prop.facing * DEG, 0]} scale={prop.scale}>
-    <PropBody prop={prop} night={night} />
+/** Set dressing. Everything sits at `at` (on the ground, or at height `y`) and faces +Z at facing 0. */
+export const Prop = ({ prop, night, time = 0 }: { prop: PlacedProp; night: boolean; time?: number }) => (
+  <group position={[prop.at[0], prop.y ?? 0, prop.at[1]]} rotation={[0, prop.facing * DEG, 0]} scale={prop.scale}>
+    <PropBody prop={prop} night={night} time={time} />
   </group>
 );
 
-const PropBody = ({ prop, night }: { prop: PropSpec; night: boolean }) => {
+const PropBody = ({ prop, night, time }: { prop: PlacedProp; night: boolean; time: number }) => {
   switch (prop.type) {
     case "tree":
       return (
@@ -95,6 +98,106 @@ const PropBody = ({ prop, night }: { prop: PropSpec; night: boolean }) => {
           ))}
         </>
       );
+    case "chair": {
+      // White plastic patio chair; the seat top is at 0.45m, the back is toward -Z.
+      const white = prop.color ?? "#f8f9fa";
+      return (
+        <>
+          <Part geometry={shapes.box(0.52, 0.06, 0.5, 0.03)} color={white} position={[0, 0.42, 0]} />
+          <Part geometry={shapes.box(0.52, 0.5, 0.06, 0.03)} color={white} position={[0, 0.7, -0.25]} rotation={[-0.12, 0, 0]} />
+          {[-1, 1].flatMap((x) => [-1, 1].map((z) => (
+            <Part key={`${x}${z}`} geometry={shapes.cylinder(0.025, 0.025, 0.42, 8)} color={white} position={[x * 0.22, 0.21, z * 0.21]} />
+          )))}
+          {[-1, 1].map((x) => (
+            <Part key={x} geometry={shapes.box(0.05, 0.04, 0.42, 0.015)} color={white} position={[x * 0.25, 0.62, 0]} />
+          ))}
+        </>
+      );
+    }
+    case "table":
+      // Round patio table, top at 0.72m.
+      return (
+        <>
+          <Part geometry={shapes.cylinder(0.42, 0.42, 0.04, 24)} color={prop.color ?? "#f8f9fa"} position={[0, 0.7, 0]} />
+          <Part geometry={shapes.cylinder(0.035, 0.035, 0.68, 10)} color="#ced4da" position={[0, 0.35, 0]} />
+          <Part geometry={shapes.cylinder(0.22, 0.25, 0.04, 16)} color="#ced4da" position={[0, 0.02, 0]} />
+        </>
+      );
+    case "mug":
+      return (
+        <>
+          <Part geometry={shapes.cylinder(0.055, 0.05, 0.12, 16)} color={prop.color ?? "#ffffff"} position={[0, 0.06, 0]} outline={0.008} />
+          <Part geometry={shapes.cylinder(0.046, 0.046, 0.01, 16)} color="#5b3a1e" position={[0, 0.117, 0]} outline={false} shadow={false} />
+          <Part geometry={shapes.torus(0.032, 0.011)} color={prop.color ?? "#ffffff"} position={[0.062, 0.06, 0]} rotation={[0, Math.PI / 2, 0]} outline={0.006} />
+        </>
+      );
+    case "dashcam": {
+      // A dashcam (off its mount) with its lens toward +Z and a blinking record light.
+      const recording = time % 1 < 0.6;
+      return (
+        <>
+          <Part geometry={shapes.box(0.22, 0.13, 0.1, 0.03)} color="#1d1b26" position={[0, 0.065, 0]} outline={0.008} />
+          <Part geometry={shapes.cylinder(0.04, 0.04, 0.04, 12)} color="#3a3a4a" position={[0, 0.065, 0.06]} rotation={[Math.PI / 2, 0, 0]} outline={false} />
+          <Part geometry={shapes.sphere(0.022)} color={recording ? "#ff1744" : "#5a1020"} emissive={recording ? "#ff1744" : undefined} position={[-0.07, 0.105, 0.055]} outline={false} shadow={false} />
+          <Part geometry={shapes.box(0.05, 0.08, 0.05, 0.01)} color="#2b2d42" position={[0, 0.17, -0.02]} outline={false} />
+        </>
+      );
+    }
+    case "bump":
+      // An asphalt hump across a lane (3.6m long along local Z), with yellow stripes.
+      return (
+        <>
+          <Part geometry={shapes.sphere(1)} color="#3d3d46" position={[0, 0, 0]} scale={[0.45, 0.13, 1.8]} outline={0.01} />
+          {[-1.2, 0, 1.2].map((z) => (
+            <Part key={z} geometry={shapes.box(0.5, 0.02, 0.3, 0.01)} color="#ffd166" position={[0, 0.115, z]} outline={false} shadow={false} />
+          ))}
+        </>
+      );
+    case "porch":
+      // Wooden deck (6 × 3m, front toward +Z) with two posts and a little roof, built against a house front.
+      return (
+        <>
+          <Part geometry={shapes.box(6, 0.06, 3, 0.02)} color={prop.color ?? "#b08155"} position={[0, 0.03, 0]} outline={false} />
+          {[-1.2, -0.6, 0, 0.6, 1.2].map((z) => (
+            <Part key={z} geometry={shapes.box(6, 0.005, 0.03, 0.002)} color="#8a5f3a" position={[0, 0.062, z]} outline={false} shadow={false} />
+          ))}
+          {[-2.85, 2.85].map((x) => (
+            <Part key={x} geometry={shapes.box(0.14, 2.6, 0.14, 0.03)} color="#f8f9fa" position={[x, 1.3, 1.35]} />
+          ))}
+          <Part geometry={shapes.box(6.4, 0.14, 3.3, 0.04)} color="#9a3b3b" position={[0, 2.66, 0.05]} rotation={[0.12, 0, 0]} />
+        </>
+      );
+    case "traffic-light": {
+      // Pole on the shoulder, arm reaching 7.8m along local -X with a signal head over each lane (lamps facing +Z),
+      // and a stop line painted 1.5m in front. Red until greenTime, then green.
+      const green = prop.greenTime !== undefined && time >= prop.greenTime;
+      const lamps = [
+        { y: 0.34, on: !green, lit: "#ff2d2d", off: "#5a1414" },
+        { y: 0, on: false, lit: "#ffd23f", off: "#5a4a14" },
+        { y: -0.34, on: green, lit: "#3ddc84", off: "#123d24" },
+      ];
+      return (
+        <>
+          <Part geometry={shapes.cylinder(0.13, 0.17, 6.2, 12)} color="#3d4150" position={[0, 3.1, 0]} />
+          <Part geometry={shapes.box(7.9, 0.16, 0.16, 0.05)} color="#3d4150" position={[-3.95, 5.95, 0]} />
+          {[-3.8, -7.4].map((x) => (
+            <group key={x} position={[x, 5.2, 0]}>
+              <Part geometry={shapes.box(0.05, 0.6, 0.05, 0.01)} color="#3d4150" position={[0, 0.5, 0]} outline={false} />
+              <Part geometry={shapes.box(0.46, 1.12, 0.32, 0.08)} color="#1d1b26" />
+              {lamps.map((lamp) => (
+                <group key={lamp.y} position={[0, lamp.y, 0.16]}>
+                  <Part geometry={shapes.sphere(0.13)} color={lamp.on ? lamp.lit : lamp.off} emissive={lamp.on ? lamp.lit : undefined} scale={[1, 1, 0.45]} outline={false} shadow={false} />
+                  <Part geometry={shapes.box(0.34, 0.04, 0.18, 0.01)} color="#1d1b26" position={[0, 0.15, 0.07]} outline={false} />
+                </group>
+              ))}
+              {/* A glow halo so the lit lamp reads from far away. */}
+              <Part geometry={shapes.sphere(0.22)} color={green ? "#3ddc84" : "#ff2d2d"} emissive={green ? "#3ddc84" : "#ff2d2d"} opacity={0.3} position={[0, green ? -0.34 : 0.34, 0.2]} scale={[1, 1, 0.3]} outline={false} shadow={false} />
+            </group>
+          ))}
+          <Part geometry={shapes.plane(8.6, 0.45)} color="#f8f9fa" position={[-4.7, 0.065 - (prop.y ?? 0), 1.5]} outline={false} shadow={false} />
+        </>
+      );
+    }
     case "mailbox":
       return (
         <>

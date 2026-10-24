@@ -85,9 +85,9 @@ To preview in the browser instead and scrub through clips, run `npm run studio`.
 ## Rendering
 
 ```bash
-npm run render -- <scene>                    # final: 60fps, full size (1080×1920 vertical)
+npm run render -- <scene>                    # final: 30fps, full size (1080×1920 vertical)
 npm run render -- <scene> --preview          # quick check: 30fps, half size
-npm run render -- <scene> --scale 0.75       # phone-sized final (810×1440), still 60fps
+npm run render -- <scene> --scale 0.75       # phone-sized final (810×1440), same fps
 npm run render -- <scene> --from 20 --to 35  # just a slice (seconds or a cue name from the scene)
 ```
 
@@ -121,6 +121,7 @@ video still renders, just without the lines that failed.
 |---|---|
 | `npm run studio` | Live preview in the browser |
 | `npm run catalog` | Lists every character, car, animation, mood, sound, camera preset, set and style |
+| `npm run preflight -- <scene>` | Everything to check before rendering in one pass: timeline + warnings + smoothness, soundtrack + spectrogram, contact sheet |
 | `npm run inspect -- <scene>` | Timeline, positions, problem warnings and smoothness check (no rendering) |
 | `npm run stills -- <scene>` | Contact sheet of frames → `out/<scene>/sheet.png` |
 | `npm run voices -- <scene>` | Records the dialogue with an AI voice (needs a key) |
@@ -136,11 +137,13 @@ video still renders, just without the lines that failed.
 - `missed-taxi`: a guy misses his taxi, then it backs up for him (vertical)
 - `brake-check`: highway brake check, rear-end crash, a fake neck injury, an attack on the dashcam, police,
   a taser, the dashcam footage replay and an arrest (vertical, ~59s)
+- `nine-plus-ten`: night parking lot, Dev films on his phone as Arjun opens the door: "What's 9 plus 10?" (vertical)
 
 ## How new clips get made
 
 Describe the clip to Claude in plain words: who's in it, what happens, the mood, any lines of dialogue. Claude
-writes `scenes/<name>.scene.ts`, runs the checks, looks at stills and the soundtrack, fixes what's off, renders
+writes `scenes/<name>.scene.ts` (the filename is all the registration a scene needs), runs `preflight`, looks at
+the stills and the soundtrack, fixes what's off, renders
 and sends you the video. Ask for changes the same way ("make the crash bigger", "she should look scared").
 
 `CLAUDE.md` holds everything Claude follows when working on Animo: the workflow, the scene language, and tips
@@ -151,3 +154,9 @@ learned from earlier clips.
 Each spoken line is recorded once and saved in `voices/`, with a list in `voices/manifest.ts`. Commit that
 folder: re-renders, on your machine or in the cloud, reuse the recordings and never pay twice. Changing a line's
 text, voice or mood records a new take.
+
+## Caches
+
+The render bundle (the compiled web page Remotion renders) lives in `out/.bundle/` and is only rebuilt when `src/`
+changes; scenes and recordings are passed in as data, so editing a scene costs nothing. Soundtracks are cached in
+`public/audio/` by content. Both folders are git-ignored and safe to delete.

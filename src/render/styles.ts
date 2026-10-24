@@ -17,6 +17,8 @@ export interface StylePreset {
   fogFar: number;
   night: boolean;
   clouds: boolean;
+  /** A visible sun low in the sky (direction toward it). */
+  sunDisc?: { color: string; glow: string; direction: [number, number, number] };
 }
 
 export const STYLE_PRESETS: Record<StyleName, StylePreset> = {
@@ -27,8 +29,10 @@ export const STYLE_PRESETS: Record<StyleName, StylePreset> = {
   },
   sunset: {
     skyTop: "#5b4b9a", skyHorizon: "#ffb27a", grass: "#7fae5a", asphalt: "#4d4a5c", sidewalk: "#c9b8a8",
-    sunColor: "#ffbf80", sunIntensity: 2.2, sunDirection: [-0.85, 0.35, 0.35],
+    // The sun sets in the east (+X) so cars "drive off into the sunset" along the roads' main direction.
+    sunColor: "#ffbf80", sunIntensity: 2.2, sunDirection: [0.85, 0.35, 0.35],
     ambientSky: "#ffd6b0", ambientGround: "#5b4b6a", ambientIntensity: 1.0, fogNear: 50, fogFar: 170, night: false, clouds: true,
+    sunDisc: { color: "#fff1c9", glow: "#ffb35c", direction: [1, 0.07, 0.06] },
   },
   night: {
     skyTop: "#0b1033", skyHorizon: "#3a4a85", grass: "#3f6e4a", asphalt: "#3b3f52", sidewalk: "#6d7186",

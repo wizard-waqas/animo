@@ -140,6 +140,18 @@ export const smack = (rng: Rng) => {
   });
 };
 
+/** Wet mud splat: a noise burst whose band sweeps down fast (the "splorch"), plus a soft low slap. Noise only. */
+export const splat = (rng: Rng, size = 1) => {
+  const band = new Bandpass(900, 1.3);
+  const body = new Lowpass(300);
+  return synth(0.2, (t) => {
+    band.set(Math.max(220, 1100 * size ** -0.3 - 5200 * t), 1.3);
+    const squelch = band.process(rng.noise()) * decay(t, 0.045) * 2.2;
+    const slap = body.process(rng.noise()) * decay(t, 0.02) * 1.6;
+    return (squelch + slap) * attack(t, 0.002) * Math.min(1.2, size);
+  });
+};
+
 export const clap = (rng: Rng) => {
   const band = new Bandpass(rng.range(1200, 1700), 1.2);
   return synth(0.09, (t) => band.process(rng.noise()) * (decay(t, 0.012) + 0.4 * decay(Math.max(0, t - 0.006), 0.01)) * 2.2);

@@ -2,13 +2,13 @@ import type { SeatName } from "../catalog/cars";
 import { type CharacterLook, RIG } from "../catalog/characters";
 import type { CarTrack } from "./carTrack";
 import { type Face, type Mood, faceAt } from "./expression";
-import type { VoiceClip } from "../../voices/manifest";
+import type { VoiceClip } from "../voice/lines";
 import { envelopeAt, estimateSpeechDuration, findVoiceClip, lineKey, stripTags } from "../voice/lines";
 import { type Vec2, type Vec3, DEG, angleDelta, clamp01, distance2, headingOf, lerp, lerpAngle, progress, sub2 } from "./math";
 import { type Path, smoothPath } from "./path";
 import { type Obstacle, routeAround } from "./route";
 import {
-  type ClipName, type Pose, NEUTRAL_POSE, SIT_POSE, UPPER_BODY_KEYS, blendPose, clipDefinition, envelope, gaitPose, idlePose,
+  type ClipName, type HandItem, type Pose, NEUTRAL_POSE, SIT_POSE, UPPER_BODY_KEYS, blendPose, clipDefinition, envelope, gaitPose, idlePose,
 } from "./pose";
 
 export interface CharacterState {
@@ -20,8 +20,8 @@ export interface CharacterState {
   face?: Face;
   /** 0..1 mouth opening from speech (lip sync). */
   talk?: number;
-  /** Item in the right hand (phone during film / phone-call). */
-  item?: "phone";
+  /** Item in the right hand (phone during film / phone-call, mug, check). */
+  item?: HandItem;
   /** Walking/running/turning-step info (distance in rig units), used to place footstep sounds. */
   gait?: { distance: number; run: boolean; weight: number };
 }
@@ -210,6 +210,18 @@ export class CharacterTrack {
     return start + clipDuration;
   }
 
+  /** Moments this character teleported (place), where a jump in position is intended. */
+  readonly jumps: number[] = [];
+
+  addPlace(start: number, pos: Vec2, facing?: number) {
+    const rest = this.standingAt(start, "place");
+    const heading = facing ?? rest.facing;
+    this.pendingFromPose = undefined;
+    this.push({ kind: "turn", start, end: start, cut: Infinity, pos, from: heading, to: heading });
+    this.jumps.push(start);
+    return start;
+  }
+
   addMood(start: number, mood: Mood) {
     this.moods.push({ time: start, mood });
     this.moods.sort((a, b) => a.time - b.time);
@@ -273,6 +285,14 @@ export class CharacterTrack {
     const segment = this.segmentAt(t);
     if (segment && (segment.kind === "enter" || segment.kind === "exit") && t < segment.end) return segment.car;
     return undefined;
+  }
+
+  /** The car this character is sitting in at time t (not while climbing in or out). */
+  seatedIn(t: number) {
+    const segment = this.segmentAt(t);
+    if (segment && (segment.kind === "enter" || segment.kind === "exit") && t < segment.end) return undefined;
+    const rest = this.restAt(t);
+    return rest.mode === "ride" ? { car: rest.car, seat: rest.seat } : undefined;
   }
 
   /** Is this character's body inside a car right now (entering, exiting or seated)? */
@@ -406,9 +426,11 @@ export class CharacterTrack {
   /** The hand item shows while its gesture is mostly raised, so it doesn't pop in at the hip. */
   private itemAt(t: number) {
     for (const gesture of this.gestures) {
-      const item = clipDefinition(gesture.clip).item;
+      const { item, itemUntil } = clipDefinition(gesture.clip);
       if (!item || t < gesture.start || t > gesture.end) continue;
-      if (envelope(t - gesture.start, gesture.end - gesture.start) > 0.4) return item;
+      const length = gesture.end - gesture.start;
+      if (itemUntil !== undefined && t > gesture.start + length * itemUntil) continue;
+      if (envelope(t - gesture.start, length) > 0.4 || (itemUntil !== undefined && t > gesture.start + 0.1)) return item;
     }
     return undefined;
   }

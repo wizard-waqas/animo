@@ -1,10 +1,9 @@
-import { bundle } from "@remotion/bundler";
-import { renderStill } from "@remotion/renderer";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { type HeadlessBrowser, renderStill } from "@remotion/renderer";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
-import { browserOptions, findScene, openComposition, parseArgs } from "./lib";
-import { generateSound } from "./sound";
+import { type CompiledScene, compileScene } from "../src/engine/compile";
+import { browserOptions, bundleOnce, elapsed, findScene, inputPropsFor, openComposition, outDirFor, parseArgs, timesFromFlag, withBrowser } from "./lib";
 
 /**
  * Render a contact sheet: a grid of stills at evenly spaced (or chosen) times.
@@ -12,46 +11,70 @@ import { generateSound } from "./sound";
  *
  * Usage: npm run stills -- <scene-id> [--count 8] [--at 1,2.5,4] [--scale 0.3] [--clean]
  */
-const { positional, flags } = parseArgs();
-const spec = findScene(positional[0]);
-const count = Number(flags.count ?? 8);
-const scale = Number(flags.scale ?? (spec.format === "landscape" ? 0.25 : 0.3));
-const debug = !flags.clean;
-const times = typeof flags.at === "string"
-  ? flags.at.split(",").map(Number)
-  : Array.from({ length: count }, (_, i) => (spec.duration * (i + 0.5)) / count);
 
-const outDir = path.resolve("out", spec.id);
-mkdirSync(outDir, { recursive: true });
+/** Run `limit` jobs at a time (each still is a software-rendered frame; a tab per core is plenty). */
+const pooled = async <T, R>(items: T[], limit: number, job: (item: T) => Promise<R>): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await job(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+};
 
-const started = Date.now();
-generateSound(spec, { quiet: true });
-const serveUrl = await bundle({ entryPoint: path.resolve("src/index.ts"), onProgress: () => undefined });
-const inputProps = { sceneId: spec.id, debug, preview: false };
-const composition = await openComposition({ serveUrl, id: spec.id, inputProps });
+export const renderContactSheet = async (
+  compiled: CompiledScene,
+  options: { browser: HeadlessBrowser; serveUrl: string; times: number[]; scale: number; debug: boolean },
+) => {
+  const { spec } = compiled;
+  const outDir = outDirFor(spec.id);
+  const inputProps = inputPropsFor(compiled, { debug: options.debug, silent: true });
+  const composition = await openComposition({ serveUrl: options.serveUrl, inputProps, browser: options.browser });
+  const tiles = await pooled(options.times, 3, async (time) => {
+    const frame = Math.min(composition.durationInFrames - 1, Math.round(time * composition.fps));
+    const { buffer } = await renderStill({
+      serveUrl: options.serveUrl, composition, frame, inputProps, imageFormat: "png", scale: options.scale, puppeteerInstance: options.browser, ...browserOptions(),
+    });
+    writeFileSync(path.join(outDir, `still-${time.toFixed(2)}s.png`), buffer!);
+    process.stdout.write(`  rendered t=${time.toFixed(2)}s\n`);
+    return PNG.sync.read(buffer!);
+  });
 
-const tiles: PNG[] = [];
-for (const time of times) {
-  const frame = Math.min(composition.durationInFrames - 1, Math.round(time * composition.fps));
-  const { buffer } = await renderStill({ serveUrl, composition, frame, inputProps, imageFormat: "png", scale, ...browserOptions() });
-  const file = path.join(outDir, `still-${time.toFixed(2)}s.png`);
-  writeFileSync(file, buffer!);
-  tiles.push(PNG.sync.read(buffer!));
-  process.stdout.write(`  rendered t=${time.toFixed(2)}s\n`);
-}
+  const columns = Math.min(4, tiles.length);
+  const rows = Math.ceil(tiles.length / columns);
+  const tileWidth = tiles[0].width;
+  const tileHeight = tiles[0].height;
+  const gap = 6;
+  const sheet = new PNG({ width: columns * tileWidth + (columns - 1) * gap, height: rows * tileHeight + (rows - 1) * gap });
+  sheet.data.fill(255);
+  tiles.forEach((tile, index) => {
+    const x = (index % columns) * (tileWidth + gap);
+    const y = Math.floor(index / columns) * (tileHeight + gap);
+    PNG.bitblt(tile, sheet, 0, 0, tileWidth, tileHeight, x, y);
+  });
+  const sheetPath = path.join(outDir, options.debug ? "sheet.png" : "sheet-clean.png");
+  writeFileSync(sheetPath, PNG.sync.write(sheet));
+  return sheetPath;
+};
 
-const columns = Math.min(4, tiles.length);
-const rows = Math.ceil(tiles.length / columns);
-const tileWidth = tiles[0].width;
-const tileHeight = tiles[0].height;
-const gap = 6;
-const sheet = new PNG({ width: columns * tileWidth + (columns - 1) * gap, height: rows * tileHeight + (rows - 1) * gap });
-sheet.data.fill(255);
-tiles.forEach((tile, index) => {
-  const x = (index % columns) * (tileWidth + gap);
-  const y = Math.floor(index / columns) * (tileHeight + gap);
-  PNG.bitblt(tile, sheet, 0, 0, tileWidth, tileHeight, x, y);
+/** Defaults shared with preflight: tile scale per format, debug tags unless --clean. */
+export const stillOptions = (spec: CompiledScene["spec"], flags: Record<string, string | true>) => ({
+  times: timesFromFlag(flags.at, spec.duration, Number(flags.count ?? 8)),
+  scale: Number(flags.scale ?? (spec.format === "landscape" ? 0.25 : 0.3)),
+  debug: !flags.clean,
 });
-const sheetPath = path.join(outDir, debug ? "sheet.png" : "sheet-clean.png");
-writeFileSync(sheetPath, PNG.sync.write(sheet));
-console.log(`\nContact sheet: ${sheetPath}  (${((Date.now() - started) / 1000).toFixed(1)}s)`);
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]).endsWith(path.join("scripts", "stills.ts"));
+if (isMain) {
+  const { positional, flags } = parseArgs();
+  const spec = await findScene(positional[0]);
+  const compiled = compileScene(spec);
+  const started = Date.now();
+  const serveUrl = await bundleOnce();
+  const sheet = await withBrowser((browser) => renderContactSheet(compiled, { browser, serveUrl, ...stillOptions(spec, flags) }));
+  console.log(`\nContact sheet: ${sheet}  (${elapsed(started)})`);
+}

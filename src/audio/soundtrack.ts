@@ -1,6 +1,6 @@
-import type { CompiledScene } from "../engine/compile";
+import { type CompiledScene, locationAt, onstage } from "../engine/compile";
 import type { Vec3 } from "../engine/math";
-import { PUNCH_BEAT, STRIDE } from "../engine/pose";
+import { PUNCH_BEAT, SMACK_RATE, STRIDE } from "../engine/pose";
 import type { SoundName } from "../engine/spec";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -18,7 +18,7 @@ import * as sounds from "./sounds";
 export interface SoundEvent { time: number; kind: string; actor?: string }
 export interface Soundtrack { bus: StereoBus; events: SoundEvent[]; screech: { actor: string; start: number; end: number }[] }
 
-const GAINS = { footstep: 0.32, door: 0.5, engine: 0.55, tires: 0.5, screech: 0.32, honk: 0.5, crash: 1.0, hop: 0.6, clip: 0.45, ambience: 1, voice: 0.95 };
+const GAINS = { splat: 0.5, footstep: 0.32, door: 0.5, engine: 0.55, tires: 0.5, screech: 0.32, honk: 0.5, crash: 1.0, hop: 0.6, clip: 0.45, ambience: 1, voice: 0.95 };
 
 export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   const duration = scene.spec.duration;
@@ -42,6 +42,8 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   };
   const play = (sound: Float32Array, time: number, point: Vec3 | undefined, level: number, kind: string, actor?: string) => {
     if (time >= duration) return;
+    // Actors in another location (after a cut) aren't heard.
+    if (actor && scene.spec.cast[actor] && !onstage(scene, actor, time)) return;
     const { gain, pan } = placement(point, time);
     bus.place(sound, time, gain * level, pan);
     events.push({ time, kind, actor });
@@ -81,6 +83,13 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
       if (segment.clip === "dance") for (let beat = segment.start; beat < segment.end; beat += 1 / 1.1) play(sounds.footstep(rng, look.height, false), beat, where, GAINS.footstep, "footstep", id);
     }
     for (const gesture of track.gestures) {
+      if (gesture.clip === "smack-wheel") {
+        const where = track.state(gesture.start).pos;
+        for (let k = 1; gesture.start + k / SMACK_RATE < gesture.end - 0.15; k++) {
+          play(sounds.thud(rng, 0.55), gesture.start + k / SMACK_RATE, [where[0], 1.1, where[2]], GAINS.clip, "wheel-smack", id);
+        }
+        continue;
+      }
       const where = track.state(gesture.start).pos;
       if (gesture.clip === "punch") {
         // Each punch reaches full extension 40% into its beat.
@@ -109,9 +118,10 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
       if (door.open) play(sounds.doorOpen(rng), door.start, carPoint(door.start), GAINS.door * 0.7, "door-open", id);
       else play(sounds.doorSlam(rng), door.start + door.duration * 0.85, carPoint(door.start), GAINS.door, "door-slam", id);
     }
-    for (const [start, end] of car.hopWindows()) {
-      play(sounds.boing(), start, carPoint(start), GAINS.hop, "boing", id);
-      play(sounds.thud(rng, 1.6), end, carPoint(end), GAINS.hop, "hop-land", id);
+    for (const hop of car.hopSounds()) {
+      if (hop.sound === "boing") play(sounds.boing(), hop.start, carPoint(hop.start), GAINS.hop, "boing", id);
+      else play(sounds.thud(rng, 1.8), hop.start, carPoint(hop.start), GAINS.hop, "bump", id);
+      play(sounds.thud(rng, hop.sound === "thud" ? 2.2 : 1.6), hop.end, carPoint(hop.end), GAINS.hop, "hop-land", id);
     }
     for (const horn of car.honks) {
       for (let i = 0; i < horn.times; i++) {
@@ -123,6 +133,9 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   for (const hit of scene.crashes) {
     const strength = Math.max(0.55, Math.min(1.3, hit.speed / 11));
     play(sounds.crash(rng, strength), hit.time, hit.point, GAINS.crash, "crash", hit.cars.join("+"));
+  }
+  for (const blob of scene.mud) {
+    play(sounds.splat(rng, blob.size * 4), blob.end, [blob.from[0] + blob.velocity[0] * (blob.end - blob.start), 1.2, blob.from[2] + blob.velocity[2] * (blob.end - blob.start)], GAINS.splat, "splat");
   }
   for (const zapShot of scene.zaps) {
     const target = scene.characters[zapShot.target].state(zapShot.start).pos;
@@ -147,7 +160,7 @@ export const buildSoundtrack = (scene: CompiledScene): Soundtrack => {
   if (scene.spec.sound.voices) {
     for (const [id, track] of Object.entries(scene.characters)) {
       for (const line of track.speech) {
-        if (!line.clip) continue;
+        if (!line.clip || !onstage(scene, id, line.start)) continue;
         const file = path.resolve("voices", line.clip.file);
         if (!existsSync(file)) continue;
         const voice = decodeWav(readFileSync(file));
@@ -195,6 +208,7 @@ const oneShot = (name: SoundName, rng: Rng) => {
     case "door-slam": return sounds.doorSlam(rng);
     case "pop": return sounds.pop();
     case "screech": return sounds.screech(rng);
+    case "splat": return sounds.splat(rng, 1);
   }
 };
 
@@ -212,8 +226,10 @@ const renderCar = (
   const blocks = Math.ceil(duration / block) + 2;
   const speed = new Float32Array(blocks);
   const occupied = new Uint8Array(blocks);
+  const audible = new Uint8Array(blocks);
   for (let b = 0; b < blocks; b++) {
     const t = Math.min(b * block, duration);
+    audible[b] = onstage(scene, id, t) ? 1 : 0;
     speed[b] = Math.abs(car.state(t).speed);
     if (b % 10 === 0) occupied[b] = Object.values(scene.characters).some((person) => person.state(t).ridingIn === id) ? 1 : 0;
     else occupied[b] = occupied[b - (b % 10)];
@@ -268,7 +284,7 @@ const renderCar = (
 
     sirenLevel += ((car.sirenSoundOn(t) ? 1 : 0) - sirenLevel) * 0.0004;
     const wail = sirenLevel > 0.001 ? siren.next(t) * sirenLevel : 0;
-    const value = (engine * GAINS.engine + tires * GAINS.tires + squeal * GAINS.screech + wail * 0.28) * mix.gain;
+    const value = (engine * GAINS.engine + tires * GAINS.tires + squeal * GAINS.screech + wail * 0.28) * mix.gain * audible[b];
     const [left, right] = panGains(mix.pan);
     bus.addAt(i, value * left, value * right);
   }
@@ -278,20 +294,35 @@ const renderCar = (
 
 /** Background bed per set/style: birds + breeze (suburb), traffic hum (city), road roar (highway), crickets (night). */
 const renderAmbience = (scene: CompiledScene, bus: StereoBus, rng: Rng) => {
-  const { set, style } = scene.spec;
+  const { style } = scene.spec;
   const night = style === "night";
-  const windLeft = new Lowpass(set === "highway" ? 520 : set === "city" ? 180 : 320);
-  const windRight = new Lowpass(set === "highway" ? 520 : set === "city" ? 180 : 320);
-  const windLevel = set === "highway" ? 0.05 : set === "city" ? 0.07 : 0.025;
+  // The bed follows location cuts (a clip can cut from the highway to a quiet porch).
+  const setAt = (t: number) => locationAt(scene.locations, t);
+  const windCutoff = (set: string) => (set === "highway" ? 520 : set === "city" ? 180 : 320);
+  const windLevelOf = (set: string) => (set === "highway" ? 0.05 : set === "city" ? 0.07 : 0.025);
+  let set = setAt(0);
+  const windLeft = new Lowpass(windCutoff(set));
+  const windRight = new Lowpass(windCutoff(set));
+  let windLevel = windLevelOf(set);
   for (let i = 0; i < bus.left.length; i++) {
+    if (i % 441 === 0) {
+      const now = setAt(i / SAMPLE_RATE);
+      if (now !== set) {
+        set = now;
+        windLeft.set(windCutoff(set));
+        windRight.set(windCutoff(set));
+      }
+      windLevel = windLevelOf(set);
+    }
     const swell = 0.75 + 0.25 * Math.sin((i / SAMPLE_RATE) * 0.7);
     bus.addAt(i, windLeft.process(rng.noise()) * windLevel * swell, windRight.process(rng.noise()) * windLevel * swell);
   }
   const duration = scene.spec.duration;
-  if (!night && (set === "suburb" || set === "narrow-street" || set === "highway" || set === "parking-lot")) {
+  if (!night) {
     for (let t = rng.range(0.2, 1.2); t < duration; t += rng.range(0.7, 2.6)) {
       const chirp = birdChirp(rng);
-      bus.place(chirp, t, set === "suburb" || set === "narrow-street" ? 0.09 : 0.04, rng.range(-0.9, 0.9));
+      const here = setAt(t);
+      if (here === "suburb" || here === "narrow-street" || here === "highway" || here === "parking-lot") bus.place(chirp, t, here === "suburb" || here === "narrow-street" ? 0.09 : 0.04, rng.range(-0.9, 0.9));
     }
   }
   if (night) {
