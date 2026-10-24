@@ -1,3 +1,4 @@
+import { isBike } from "../catalog/cars";
 import { type CompiledScene, locationAt, onstage } from "../engine/compile";
 import type { Vec3 } from "../engine/math";
 import { PUNCH_BEAT, SMACK_RATE, STRIDE } from "../engine/pose";
@@ -234,6 +235,7 @@ const renderCar = (
     if (b % 10 === 0) occupied[b] = Object.values(scene.characters).some((person) => person.state(t).ridingIn === id) ? 1 : 0;
     else occupied[b] = occupied[b - (b % 10)];
   }
+  const bike = isBike(car.shape);
   const engineFilter = new Lowpass(300);
   const tireFilter = new Lowpass(300);
   const squealer = new sounds.Squeal(rng);
@@ -258,7 +260,8 @@ const renderCar = (
     const running = occupied[b] === 1 || v > 0.2;
     const engineTarget = running ? 0.1 + 0.011 * Math.min(v, 30) + 0.02 * Math.max(0, Math.min(acceleration, 6)) : 0;
     engineLevel += (engineTarget - engineLevel) * 0.0008;
-    const frequency = 26 + 3.1 * v + 1.6 * Math.max(0, Math.min(acceleration, 8));
+    // A motorcycle's smaller engine buzzes about an octave higher.
+    const frequency = (26 + 3.1 * v + 1.6 * Math.max(0, Math.min(acceleration, 8))) * (bike ? 1.9 : 1);
     phase = (phase + frequency / SAMPLE_RATE) % 1;
     const saw = 2 * phase - 1;
     const saw2 = 2 * ((phase * 2) % 1) - 1;

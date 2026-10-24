@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadScenes } from "../scripts/lib";
 import { compileScene, evaluateScene, findJolts } from "../src/engine/compile";
-import { at, car, character, scene, next } from "../src/engine/dsl";
+import { after, at, car, character, scene, next } from "../src/engine/dsl";
 
 describe("scene validation", () => {
   it("rejects unknown clips with a readable message", () => {
@@ -67,6 +67,35 @@ describe("scene warnings", () => {
 });
 
 const scenes = await loadScenes();
+
+describe("kick-over", () => {
+  it("times the kick to the passing motorcycle, tips it over and throws the rider flat", () => {
+    const bike = car("bike", "motorcycle", { at: [-20, 0], facing: 90 });
+    const rider = character("rider", "casual-guy", { at: [0, 0], seatedIn: { car: bike, seat: "driver" } });
+    const kicker = character("kicker", "casual-guy", { at: [0, -1], facing: 0 });
+    const spec = scene({
+      id: "kick", duration: 8, cast: [bike, rider, kicker],
+      timeline: [at(0, bike.driveTo([60, 0], { fromSpeed: 8, endSpeed: 8 })), at(0, kicker.kickOver(bike)), after(kicker, rider.play("get-up"), 2)],
+    });
+    const compiled = compileScene(spec);
+    // The bike reaches the kicker at x ≈ -0.3 after ~2.5s; kicked from its left (-Z), it falls onto its right.
+    const contact = compiled.timeline.find((row) => row.label.startsWith("kicks"))!;
+    expect(contact.label).toMatch(/at 2\.4\ds/);
+    const later = evaluateScene(compiled, 4.2);
+    expect(later.cars.bike.tilt).toBeLessThan(-1.2);
+    expect(Math.abs(later.cars.bike.speed)).toBeLessThan(0.1);
+    expect(later.characters.rider.ridingIn).toBeUndefined();
+    expect(later.characters.rider.pose.spineX).toBeLessThan(-1);
+    expect(compiled.warnings.filter((warning) => !warning.startsWith("No camera"))).toEqual([]);
+  });
+
+  it("refuses a kick from too far away", () => {
+    const bike = car("bike", "motorcycle", { at: [-20, 0], facing: 90 });
+    const kicker = character("kicker", "casual-guy", { at: [0, -4], facing: 0 });
+    const spec = scene({ id: "far", duration: 8, cast: [bike, kicker], timeline: [at(0, bike.driveTo([60, 0], { fromSpeed: 8, endSpeed: 8 })), at(0, kicker.kickOver(bike))] });
+    expect(() => compileScene(spec)).toThrow(/stand 0\.7–1\.5m beside it/);
+  });
+});
 
 describe("every scene file", () => {
   it.each(scenes.map((spec) => [spec.id, spec] as const))("%s compiles with no warnings or jolts", (_, spec) => {

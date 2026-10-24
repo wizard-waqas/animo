@@ -27,6 +27,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "Aah."
   },
+  "53fdbf9d": {
+    "file": "53fdbf9d.wav",
+    "duration": 2.326,
+    "envelope": "0212fkkmonqvDJMLKKEvsud00GPzywxvq30009eedvTUXVNEyh000000d50000kzBCECAzyzADGFEFCCCzBBINJAg100948iNZWTQIsb053yDCBHJKIzmmntJTIKFzyxvwtqqrxxzDKz",
+    "provider": "elevenlabs",
+    "voice": "cgSgspJ2msm6clMCkdW9",
+    "text": "You are parked in a\nno parking zone."
+  },
   "558468f0": {
     "file": "558468f0.wav",
     "duration": 3.301,
@@ -42,6 +50,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "provider": "elevenlabs",
     "voice": "iP95p4xoKVk53GoZ742B",
     "text": "Your truck covered my car\nin mud. You're paying!"
+  },
+  "5d69edc5": {
+    "file": "5d69edc5.wav",
+    "duration": 1.789,
+    "envelope": "00ovyBEGFHAAMNHDwbdgjlsLOOPNLKJIHIIHEAym50000000000000000008a6797CMNSVZXYSp0000006sDNQGAwspuzCHCzzxsmfb60001",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "MUMMY! PAPA!"
   },
   "69bdc235": {
     "file": "69bdc235.wav",
@@ -59,46 +75,6 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "cgSgspJ2msm6clMCkdW9",
     "text": "[laughs] HAHAHA!"
   },
-  "97fa7401": {
-    "file": "97fa7401.wav",
-    "duration": 1.191,
-    "envelope": "026VZWSROHBzlmggd5005wWYXTXVIDloDwr50631rFFIGHIGFHHJAzxuuojfaa6200000003",
-    "provider": "elevenlabs",
-    "voice": "iP95p4xoKVk53GoZ742B",
-    "text": "Thanks, Dashcam."
-  },
-  "b0c68e00": {
-    "file": "b0c68e00.wav",
-    "duration": 3.114,
-    "envelope": "00xGNOQSSQKyg8779aefkcfnvADLQSSQOOMLMLCwywopmsqnnkja6100000000000000000000000aFSVTYZVUTTQPNNLJKIIHGJLMMFAukhmpyCzOKHJGHJFDAqm90mmjmOKHttokfcb7fsyEEHJQVQSURJFEFFEEEIJGHDBDDDzvusspjd96667af",
-    "provider": "elevenlabs",
-    "voice": "nPczCjzI2devNBz1zQrb",
-    "text": "F U! Learn how\nto DRIVE!"
-  },
-  "fd961a77": {
-    "file": "fd961a77.wav",
-    "duration": 2.505,
-    "envelope": "0034ecajlb49QZOFysmfcf600bmog9100000000000000000000000000007GONKJDADDDDBKOSOAuvuokMLHEBxpjdab98687dcjozEMNOJJEiEPNGxrqsuCAf7027fkonmcNFHQCAy89500008fdm",
-    "provider": "elevenlabs",
-    "voice": "iP95p4xoKVk53GoZ742B",
-    "text": "Wait... their number's\nright on the truck!"
-  },
-  "53fdbf9d": {
-    "file": "53fdbf9d.wav",
-    "duration": 2.326,
-    "envelope": "0212fkkmonqvDJMLKKEvsud00GPzywxvq30009eedvTUXVNEyh000000d50000kzBCECAzyzADGFEFCCCzBBINJAg100948iNZWTQIsb053yDCBHJKIzmmntJTIKFzyxvwtqqrxxzDKz",
-    "provider": "elevenlabs",
-    "voice": "cgSgspJ2msm6clMCkdW9",
-    "text": "You are parked in a\nno parking zone."
-  },
-  "5d69edc5": {
-    "file": "5d69edc5.wav",
-    "duration": 1.789,
-    "envelope": "00ovyBEGFHAAMNHDwbdgjlsLOOPNLKJIHIIHEAym50000000000000000008a6797CMNSVZXYSp0000006sDNQGAwspuzCHCzzxsmfb60001",
-    "provider": "elevenlabs",
-    "voice": "iP95p4xoKVk53GoZ742B",
-    "text": "MUMMY! PAPA!"
-  },
   "9296fc40": {
     "file": "9296fc40.wav",
     "duration": 1.43,
@@ -115,6 +91,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "pNInz6obpgDQGcFmaJgB",
     "text": "Who's yelling at my wife?"
   },
+  "97fa7401": {
+    "file": "97fa7401.wav",
+    "duration": 1.191,
+    "envelope": "026VZWSROHBzlmggd5005wWYXTXVIDloDwr50631rFFIGHIGFHHJAzxuuojfaa6200000003",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Thanks, Dashcam."
+  },
   "9a7a1337": {
     "file": "9a7a1337.wav",
     "duration": 2.927,
@@ -123,6 +107,14 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "voice": "cgSgspJ2msm6clMCkdW9",
     "text": "It was an accident.\nBut not mine."
   },
+  "b0c68e00": {
+    "file": "b0c68e00.wav",
+    "duration": 3.114,
+    "envelope": "00xGNOQSSQKyg8779aefkcfnvADLQSSQOOMLMLCwywopmsqnnkja6100000000000000000000000aFSVTYZVUTTQPNNLJKIIHGJLMMFAukhmpyCzOKHJGHJFDAqm90mmjmOKHttokfcb7fsyEEHJQVQSURJFEFFEEEIJGHDBDDDzvusspjd96667af",
+    "provider": "elevenlabs",
+    "voice": "nPczCjzI2devNBz1zQrb",
+    "text": "F U! Learn how\nto DRIVE!"
+  },
   "be81ca33": {
     "file": "be81ca33.wav",
     "duration": 1.651,
@@ -130,5 +122,45 @@ export const VOICE_CLIPS: Record<string, VoiceClip> = {
     "provider": "elevenlabs",
     "voice": "pqHfZKP75CvOlQylNhV4",
     "text": "Who did this?!"
+  },
+  "d9d85d63": {
+    "file": "d9d85d63.wav",
+    "duration": 7,
+    "envelope": "0004lCEytvCJKJGOSSQMzi60jge8eKNKIIGDBytrpnljc000000000000000000000000000000000000000000000000000000000007sGIExuxEKNAsmxPKMpxIIyf1ii5yPOPNCg0hc8cCJEBAyzunrsxdsurrpmke30000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000aIMLLKXYZYWSQOOPQQQRNCDTVUPKLHGGIHFGEFFHJKMKBFGLNSLIILCwronef02000000000000000000000000000000006swxyzywvCHNQSTQQSYVVRLk5d96bNNPKHGFCsqrmnofnkeea7500000000000",
+    "provider": "elevenlabs",
+    "voice": "cjVigY5qzO86Huf0OWal",
+    "text": "Are you okay? Did you get a concussion?\nThere is only you. One person."
+  },
+  "da53dc58": {
+    "file": "da53dc58.wav",
+    "duration": 3.578,
+    "envelope": "012cqttEECEyDqljd75656fsPMEl0000000fgnndb07305100000000000000000000000000000069lke8elhiiijaBJGKHEEEBokc93iqxBuwpm9533221gAtyutoliebaa760000000000000000000000000rFsk85AZQLJHIHIIsoidagtDvl900000005bg970200000002699aeq",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "I'm a victim, and so is my friend.\nTWO victims!"
+  },
+  "da643ffa": {
+    "file": "da643ffa.wav",
+    "duration": 4.437,
+    "envelope": "00SZMOHJqopmc000000DVMIJwttqe100000000JJBzyywtArwrlmgd9c0fmqwBKTLHMSNyzOQAhellrdwOMEFCtc10fewCCCwstob300000000000000000DOQPLIKONIfa6FUOSONKKtbacGRPNLMOOONNLIEDCDytkc11300039eixOQJFApONKAhhkji7QPEFEFg5082wGDBDCvsmc21000000000000000vIVXXLj8c9a720SWRSRRPPOORQMKDzxqpqvxB",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "[sings] Bom bom bom, Motorcycle!\nBlue blue blue! Motorcycle!\nWoohoo!"
+  },
+  "e0419e0c": {
+    "file": "e0419e0c.wav",
+    "duration": 1.621,
+    "envelope": "0001ajTSRLFsvBDDMPQOMMMLOGyAzoDSZPPKLLJHuiedddggbacjHLMKFENExslskdacoyBwxyxFAACENWLIFpi92000000000",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "FERNANDO IS RIGHT HERE!"
+  },
+  "fd961a77": {
+    "file": "fd961a77.wav",
+    "duration": 2.505,
+    "envelope": "0034ecajlb49QZOFysmfcf600bmog9100000000000000000000000000007GONKJDADDDDBKOSOAuvuokMLHEBxpjdab98687dcjozEMNOJJEiEPNGxrqsuCAf7027fkonmcNFHQCAy89500008fdm",
+    "provider": "elevenlabs",
+    "voice": "iP95p4xoKVk53GoZ742B",
+    "text": "Wait... their number's\nright on the truck!"
   }
 };

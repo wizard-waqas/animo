@@ -19,7 +19,7 @@ export interface CarShape {
   /** Z center of the cabin. */
   cabinCenter: number;
   rearDoors: boolean;
-  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo" | "police" | "dump-bed";
+  extra?: "pickup-bed" | "taxi-sign" | "spoiler" | "roof-rack" | "cargo" | "police" | "dump-bed" | "motorcycle";
 }
 
 export const CARS = {
@@ -75,7 +75,16 @@ export const CARS = {
     bodyBottom: 0.55, beltline: 1.45, roof: 2.75, cabinLength: 1.6, cabinCenter: 2.5, rearDoors: false,
     extra: "dump-bed",
   },
+  motorcycle: {
+    label: "Motorcycle (one rider, tips over when kicked)", color: "#1e6bff",
+    length: 2.1, width: 0.8, wheelRadius: 0.33, wheelbase: 1.45,
+    bodyBottom: 0.35, beltline: 0.82, roof: 1.15, cabinLength: 0.6, cabinCenter: -0.15, rearDoors: false,
+    extra: "motorcycle",
+  },
 } satisfies Record<string, CarShape>;
+
+/** Two wheels, one seat, no doors or cabin. */
+export const isBike = (shape: CarShape) => shape.extra === "motorcycle";
 
 export type CarModel = keyof typeof CARS;
 export const CAR_MODELS = Object.keys(CARS) as CarModel[];
@@ -96,6 +105,11 @@ export interface SeatLayout {
 }
 
 export const seatLayout = (shape: CarShape, seat: SeatName): SeatLayout | undefined => {
+  if (isBike(shape)) {
+    if (seat !== "driver") return undefined;
+    // Straddling the seat; climbs on from the left side.
+    return { seat: [0, -0.12], hipHeight: shape.beltline + 0.06, doorStand: [0.85, -0.12], side: 1, door: { centerZ: -0.12, length: 0 } };
+  }
   const isRear = seat === "rear-left" || seat === "rear-right";
   if (isRear && !shape.rearDoors) return undefined;
   const side = seat === "driver" || seat === "rear-left" ? 1 : -1;

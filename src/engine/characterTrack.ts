@@ -1,4 +1,4 @@
-import type { SeatName } from "../catalog/cars";
+import { type SeatName, isBike } from "../catalog/cars";
 import { type CharacterLook, RIG } from "../catalog/characters";
 import type { CarTrack } from "./carTrack";
 import { type Face, type Mood, faceAt } from "./expression";
@@ -8,7 +8,7 @@ import { type Vec2, type Vec3, DEG, angleDelta, clamp01, distance2, headingOf, l
 import { type Path, smoothPath } from "./path";
 import { type Obstacle, routeAround } from "./route";
 import {
-  type ClipName, type HandItem, type Pose, NEUTRAL_POSE, SIT_POSE, UPPER_BODY_KEYS, blendPose, clipDefinition, envelope, gaitPose, idlePose,
+  type ClipName, type HandItem, type Pose, LYING_POSE, NEUTRAL_POSE, RIDE_POSE, SIT_POSE, UPPER_BODY_KEYS, blendPose, clipDefinition, envelope, gaitPose, idlePose,
 } from "./pose";
 
 export interface CharacterState {
@@ -48,6 +48,8 @@ type BodySegment = { start: number; end: number; cut: number; fromPose?: Pose } 
   | { kind: "clip"; pos: Vec2; facing: number; clip: ClipName; hold: boolean }
   | { kind: "enter"; car: string; seat: SeatName; from: Vec2; fromFacing: number }
   | { kind: "exit"; car: string; seat: SeatName }
+  /** Thrown off a vehicle (a kicked-over motorcycle): tumbles to `to` and ends lying flat. */
+  | { kind: "thrown"; car: string; seat: SeatName; to: Vec2; toFacing: number }
 );
 
 interface Gesture { start: number; end: number; clip: ClipName }
@@ -104,6 +106,7 @@ export class CharacterTrack {
     const segment = this.segmentAt(t);
     if (!segment) return this.initial;
     if (segment.kind === "enter") return { mode: "ride", car: segment.car, seat: segment.seat };
+    if (segment.kind === "thrown") return { mode: "stand", pos: segment.to, facing: segment.toFacing, pose: LYING_POSE };
     if (segment.kind === "exit") {
       const exitState = this.evaluateSegment(segment, Math.min(t, segment.cut, segment.end));
       return { mode: "stand", pos: [exitState.pos[0], exitState.pos[2]], facing: exitState.facing };
@@ -280,6 +283,16 @@ export class CharacterTrack {
     return start + EXIT_DURATION;
   }
 
+  /** Knocked off the vehicle it's riding: flies to `to` and lands flat on the back (held until get-up). */
+  addThrown(start: number, to: Vec2, toFacing: number, duration = 0.9) {
+    this.assertUnread(start, "thrown off");
+    this.interruptAt(start);
+    const rest = this.restAt(start);
+    if (rest.mode !== "ride") throw new Error(`${this.id} isn't riding anything at t=${start.toFixed(2)}s, so it can't be thrown off.`);
+    this.push({ kind: "thrown", start, end: start + duration, cut: Infinity, car: rest.car, seat: rest.seat, to, toFacing });
+    return start + duration;
+  }
+
   /** The car this character is climbing into or out of at time t, if any. */
   boardingAt(t: number) {
     const segment = this.segmentAt(t);
@@ -298,7 +311,7 @@ export class CharacterTrack {
   /** Is this character's body inside a car right now (entering, exiting or seated)? */
   isInVehicle(t: number) {
     const segment = this.segmentAt(t);
-    if (segment && (segment.kind === "enter" || segment.kind === "exit") && t < segment.end) return true;
+    if (segment && (segment.kind === "enter" || segment.kind === "exit" || segment.kind === "thrown") && t < segment.end) return true;
     return this.restAt(t).mode === "ride";
   }
 
@@ -321,7 +334,12 @@ export class CharacterTrack {
 
   private evaluateRest(rest: RestState, t: number): CharacterState {
     if (rest.mode === "stand") return { pos: [rest.pos[0], 0, rest.pos[1]], facing: rest.facing, pose: rest.pose ?? idlePose(t) };
-    return this.ridingState(rest.car, rest.seat, t, SIT_POSE);
+    return this.ridingState(rest.car, rest.seat, t, this.seatPose(rest.car));
+  }
+
+  /** Sitting in a car, or straddling a motorcycle. */
+  private seatPose(carId: string) {
+    return isBike(this.cars[carId].shape) ? RIDE_POSE : SIT_POSE;
   }
 
   private ridingState(carId: string, seat: SeatName, t: number, pose: Pose): CharacterState {
@@ -380,7 +398,8 @@ export class CharacterTrack {
       }
       case "enter": {
         const move = smoothStep(progress(localTime, 0.3, 1.2));
-        const seated = this.ridingState(segment.car, segment.seat, t, SIT_POSE);
+        const seatPose = this.seatPose(segment.car);
+        const seated = this.ridingState(segment.car, segment.seat, t, seatPose);
         return {
           pos: [
             lerp(segment.from[0], seated.pos[0], move),
@@ -388,13 +407,14 @@ export class CharacterTrack {
             lerp(segment.from[1], seated.pos[2], move),
           ],
           facing: lerpAngle(segment.fromFacing, seated.facing, move),
-          pose: blendPose(idlePose(t), SIT_POSE, move),
+          pose: blendPose(idlePose(t), seatPose, move),
           ridingIn: move > 0.5 ? segment.car : undefined,
         };
       }
       case "exit": {
         const move = smoothStep(progress(localTime, 0.3, 1.1));
-        const seated = this.ridingState(segment.car, segment.seat, t, SIT_POSE);
+        const seatPose = this.seatPose(segment.car);
+        const seated = this.ridingState(segment.car, segment.seat, t, seatPose);
         const seatInfo = this.cars[segment.car].seatWorld(segment.seat, t);
         const facingOut = seatInfo.heading + seatInfo.side * 90 * DEG;
         return {
@@ -404,8 +424,24 @@ export class CharacterTrack {
             lerp(seated.pos[2], seatInfo.doorStand[1], move),
           ],
           facing: lerpAngle(seated.facing, facingOut, move),
-          pose: blendPose(SIT_POSE, idlePose(t), move),
+          pose: blendPose(seatPose, idlePose(t), move),
           ridingIn: move < 0.5 ? segment.car : undefined,
+        };
+      }
+      case "thrown": {
+        // Launched from the seat where it was at the moment of the hit, on a short arc, rolling onto the back.
+        const from = this.ridingState(segment.car, segment.seat, segment.start, this.seatPose(segment.car));
+        const u = clamp01(localTime / duration);
+        const travel = 1 - (1 - u) * (1 - u);
+        const flip = smoothStep(u / 0.75);
+        return {
+          pos: [
+            lerp(from.pos[0], segment.to[0], travel),
+            lerp(from.pos[1], 0, smoothStep(u / 0.6)) + 0.45 * Math.sin(Math.PI * Math.min(1, u / 0.6)),
+            lerp(from.pos[2], segment.to[1], travel),
+          ],
+          facing: lerpAngle(from.facing, segment.toFacing, flip),
+          pose: blendPose(this.seatPose(segment.car), withFlail(LYING_POSE, t, 1 - u), flip),
         };
       }
     }
@@ -455,6 +491,15 @@ export class CharacterTrack {
     return Math.max(0, ...this.segments.map((segment) => Math.min(segment.cut, segment.end)));
   }
 }
+
+/** Arms and legs flapping (fading out with `amount`) while tumbling. */
+const withFlail = (pose: Pose, t: number, amount: number): Pose => ({
+  ...pose,
+  lShoulderZ: pose.lShoulderZ + 0.9 * amount * Math.sin(t * 19),
+  rShoulderZ: pose.rShoulderZ + 0.9 * amount * Math.sin(t * 17 + 1),
+  lKnee: pose.lKnee + 0.6 * amount * Math.abs(Math.sin(t * 13)),
+  rKnee: pose.rKnee + 0.6 * amount * Math.abs(Math.sin(t * 15 + 2)),
+});
 
 /** Distance covered after `time` seconds: ramp up to `speed`, cruise, ramp down, stop exactly at `distance`. */
 export const trapezoidDistance = (time: number, distance: number, speed: number, ramp: number) => {

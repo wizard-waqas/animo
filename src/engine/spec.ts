@@ -53,6 +53,8 @@ const characterActions = z.discriminatedUnion("type", [
   z.object({ type: z.literal("feel"), actor: z.string(), mood: enumOf(MOOD_NAMES) }),
   z.object({ type: z.literal("tase"), actor: z.string(), target: z.string(), duration: finite.positive().default(2.4) }),
   z.object({ type: z.literal("yank-dashcam"), actor: z.string(), car: z.string(), duration: finite.positive().default(3) }),
+  /** Kick a passing motorcycle over: waits for it to come by, kicks, it tips and slides, the rider is thrown. */
+  z.object({ type: z.literal("kick-over"), actor: z.string(), car: z.string() }),
 ]);
 
 const carActions = z.discriminatedUnion("type", [
